@@ -6,6 +6,12 @@ module Web.CRUD (
        -- * CRUD functions
        atomicCRUD,
        openCRUD,
+       -- * Table functions
+       readTable,
+       writeTable,
+       TableUpdate(..),
+       tableUpdate,
+       writeTableUpdate,
        ) where
 
 import Data.Aeson
@@ -90,7 +96,7 @@ atomicCRUD crud = CRUD
 openCRUD :: forall row . (Show row, ToJSON row, FromJSON row) => Handle -> IO (CRUD STM row)
 openCRUD h = do
 
-    env <- openTable h 
+    env <- readTable h 
 
     -- This is our table,
     table <- newTVarIO env
@@ -181,8 +187,8 @@ openCRUD h = do
 ------------------------------------------------------------------------------------
 -- Table
 
-openTable :: (ToJSON row, FromJSON row) => Handle -> IO (Table row)
-openTable h = do
+readTable :: (FromJSON row) => Handle -> IO (Table row)
+readTable h = do
 
     let sz = 32 * 1024 :: Int
 
@@ -208,16 +214,41 @@ openTable h = do
     loadCRUD BS.empty HashMap.empty 
 
 
-writeTableUpdate :: (ToJSON row, FromJSON row) => Handle -> TableUpdate row -> IO ()
+writeTableUpdate :: (ToJSON row) => Handle -> TableUpdate row -> IO ()
 writeTableUpdate h row = do
         LBS.hPutStr h (encode row)
         LBS.hPutStr h "\n" -- just for prettyness, nothing else
                      
-writeTable :: (ToJSON row, FromJSON row) => Handle -> Table row -> IO ()
+writeTable :: (ToJSON row) => Handle -> Table row -> IO ()
 writeTable h table = sequence_
         [ writeTableUpdate h $ RowUpdate (Named iD row)
         | (iD,row) <- HashMap.toList table
         ]
+
+-- Changes all all either an update (create a new field if needed) or a delete.
+
+data TableUpdate row
+        = RowUpdate (Named row)
+        | RowDelete Id
+        | Shutdown Text       -- last message; please stop listening. Msg for informational purposes ony.
+        deriving (Show, Eq)
+        
+instance ToJSON row => ToJSON (TableUpdate row) where
+   -- Assumption: the obj contains an "id" key
+   toJSON (RowUpdate namedRow) = toJSON namedRow
+   toJSON (RowDelete key)      = Object $ HashMap.fromList [("delete",String key)]
+   toJSON (Shutdown msg)       = Object $ HashMap.fromList [("shutdown",String msg)]
+
+instance FromJSON row => FromJSON (TableUpdate row) where
+    parseJSON (Object v) = 
+        ( RowUpdate <$> parseJSON (Object v)) <|> 
+        ( RowDelete <$> v .: "delete")        <|>
+        ( Shutdown  <$> v .: "shutdown")
+
+tableUpdate :: TableUpdate row -> Table row -> Table row
+tableUpdate (RowUpdate (Named key row)) = HashMap.insert key row
+tableUpdate (RowDelete key)             = HashMap.delete key
+tableUpdate (Shutdown msg)              = id
 
 ------------------------------------------------------------------------------------
 -- CRUD
@@ -267,36 +298,6 @@ readOnlyCRUD crud = CRUD
 -}
 
 ----------------------------------------------------------------------
-
--- Changes all all either an update (create a new field if needed) or a delete.
-
-data TableUpdate row
-        = RowUpdate (Named row)
-        | RowDelete Id
-        | Shutdown Text       -- last message; please stop listening. Msg for informational purposes ony.
-        deriving (Show, Eq)
-        
-instance ToJSON row => ToJSON (TableUpdate row) where
-   -- Assumption: the obj contains an "id" key
-   toJSON (RowUpdate namedRow) = toJSON namedRow
-   toJSON (RowDelete key)      = Object $ HashMap.fromList [("delete",String key)]
-   toJSON (Shutdown msg)       = Object $ HashMap.fromList [("shutdown",String msg)]
-
-instance FromJSON row => FromJSON (TableUpdate row) where
-    parseJSON (Object v) = 
-        ( RowUpdate <$> parseJSON (Object v)
-        ) <|> 
-        ( RowDelete <$>
-               v .: "delete"
-        ) <|>
-        ( Shutdown <$>
-               v .: "shutdown"
-        )
-
-tableUpdate :: TableUpdate row -> HashMap Text row -> HashMap Text row
-tableUpdate (RowUpdate (Named key row)) = HashMap.insert key row
-tableUpdate (RowDelete key)             = HashMap.delete key
-tableUpdate (Shutdown msg)              = id
 
 ----------------------------------------------------
 
