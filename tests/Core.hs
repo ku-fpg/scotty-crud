@@ -125,7 +125,7 @@ interpBind (Restart) k env = do
 --        hClose (handle env)
 --        threadDelay (2 * 1000 * 1000)
         h <- openBinaryFile test_json ReadWriteMode
-        crud <- readCRUD h
+        crud <- openCRUD h
         interp (k ()) (env { handle = h, theCRUD = atomicCRUD crud })
         
 
@@ -158,7 +158,7 @@ runCRUDAction prog = do
         then removeFile test_json
         else return ()
         h <- openBinaryFile test_json ReadWriteMode
-        crud <- readCRUD h
+        crud <- openCRUD h
         let debugging _ = return ()
 --        let debugging = id
         ans <- interp prog $ Env (atomicCRUD crud) test_json h [] [] debugging 

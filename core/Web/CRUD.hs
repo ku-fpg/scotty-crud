@@ -28,8 +28,8 @@ type Row       = Object
 
 ------------------------------------------------------------------------------------
 -- Table
-readTable :: CRUDRow row => Handle -> IO (Table row)
-readTable h = do
+openTable :: CRUDRow row => Handle -> IO (Table row)
+openTable h = do
 
     let sz = 32 * 1024 :: Int
 
@@ -69,7 +69,8 @@ writeTable h table = sequence_
 ------------------------------------------------------------------------------------
 -- CRUD
 
--- | A CRUD is a OO-style database Table, with getters and setters, a table of typed rows.
+-- | A CRUD is a OO-style database Table of typed rows, with getters and setters. 
+--   The default row is a JSON Object.
 data CRUD m row = CRUD
      { createRow :: row       -> m (Named row)
      , getRow    :: Id        -> m (Maybe (Named row))
@@ -101,12 +102,10 @@ atomicCRUD crud = CRUD
 -- Be careful: the default overloading of () for FromJSON
 -- will never work, because ...
 
-readCRUD :: forall row . (Show row, CRUDRow row) => Handle -> IO (CRUD STM row)
-readCRUD h = do
+openCRUD :: forall row . (Show row, CRUDRow row) => Handle -> IO (CRUD STM row)
+openCRUD h = do
 
-    env <- readTable h 
-
---    print env
+    env <- openTable h 
 
     -- This is our table,
     table <- newTVarIO env
@@ -191,7 +190,7 @@ readCRUD h = do
                              updateCRUD (Shutdown msg)
                      atomically $ do  -- wait for shutdown      
                              takeTMVar done
-     , sync = return () -- syncCRUD
+     , sync = syncCRUD
      }
 
 
