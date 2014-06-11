@@ -1,5 +1,12 @@
 {-# LANGUAGE OverloadedStrings, ScopedTypeVariables, TypeFamilies, TypeSynonymInstances, FlexibleInstances #-}
-module Web.CRUD where
+module Web.CRUD (
+       -- * Basic types
+       CRUD(..),
+       Id, Table, Row, Named(..),
+       -- * CRUD functions
+       atomicCRUD,
+       openCRUD,
+       ) where
 
 import Data.Aeson
 import Data.Aeson.Parser as P
@@ -20,55 +27,6 @@ import Control.Exception
 import System.IO
 
 ------------------------------------------------------------------------------------
--- Basic synonyms for key structures 
---
-type Id        = Text
-type Table row = HashMap Id row
-type Row       = Object
-
-------------------------------------------------------------------------------------
--- Table
-openTable :: CRUDRow row => Handle -> IO (Table row)
-openTable h = do
-
-    let sz = 32 * 1024 :: Int
-
-    let loadCRUD bs env
-          | BS.null bs = do
-                  bs' <- BS.hGet h sz
-                  if BS.null bs'
-                  then return env        -- done, done, done (EOF)
-                  else loadCRUD bs' env
-          | otherwise =
-                  parseCRUD (Atto.parse P.json bs) env
-        parseCRUD (Fail bs _ msg) env
-                | BS.all (isSpace . chr . fromIntegral) bs = loadCRUD BS.empty env
-                | otherwise = fail $ "parse error: " ++ msg
-        parseCRUD (Partial k) env = do
-                  bs <- BS.hGet h sz    
-                  parseCRUD (k bs) env
-        parseCRUD (Done bs r) env = do
-                  case fromJSON r of
-                    Error msg -> error msg
-                    Success update -> loadCRUD bs $! tableUpdate update env
-
-    loadCRUD BS.empty HashMap.empty 
-
-
-writeTableUpdate :: CRUDRow row => Handle -> TableUpdate row -> IO ()
-writeTableUpdate h row = do
-        LBS.hPutStr h (encode row)
-        LBS.hPutStr h "\n" -- just for prettyness, nothing else
-                     
-writeTable :: CRUDRow row => Handle -> Table row -> IO ()
-writeTable h table = sequence_
-        [ writeTableUpdate h $ RowUpdate (Named iD row)
-        | (iD,row) <- HashMap.toList table
-        ]
-
-------------------------------------------------------------------------------------
--- CRUD
-
 -- | A CRUD is a OO-style database Table of typed rows, with getters and setters. 
 --   The default row is a JSON Object.
 data CRUD m row = CRUD
@@ -80,6 +38,33 @@ data CRUD m row = CRUD
      , shutdown  :: Text      -> IO ()  -- waits until shutdown complete (and persistant file(s) written to disk)
      , sync                   :: m ()
      }
+
+------------------------------------------------------------------------------------
+-- Basic synonyms for key structures 
+--
+type Id        = Text
+type Table row = HashMap Id row
+type Row       = Object
+
+------------------------------------------------------------------------------------
+-- | A pair of Name(Id) and row.
+data Named row = Named Id row
+   deriving (Eq,Show)
+
+instance FromJSON row => FromJSON (Named row) where
+    parseJSON (Object v) = Named
+                <$> v .: "id"
+                <*> (parseJSON $ Object $ HashMap.delete "id" v)
+                
+instance ToJSON row => ToJSON (Named row) where                
+   toJSON (Named key row) = 
+                   case toJSON row of
+                     Object env -> Object $ HashMap.insert "id" (String key) env
+                     _ -> error "row should be an object"
+
+
+------------------------------------------------------------------------------------
+-- CRUD functions
 
 -- | take a STM-based CRUD, and return a IO-based CRUD
 atomicCRUD :: CRUD STM row -> CRUD IO row
@@ -102,7 +87,7 @@ atomicCRUD crud = CRUD
 -- Be careful: the default overloading of () for FromJSON
 -- will never work, because ...
 
-openCRUD :: forall row . (Show row, CRUDRow row) => Handle -> IO (CRUD STM row)
+openCRUD :: forall row . (Show row, ToJSON row, FromJSON row) => Handle -> IO (CRUD STM row)
 openCRUD h = do
 
     env <- openTable h 
@@ -193,6 +178,51 @@ openCRUD h = do
      , sync = syncCRUD
      }
 
+------------------------------------------------------------------------------------
+-- Table
+
+openTable :: (ToJSON row, FromJSON row) => Handle -> IO (Table row)
+openTable h = do
+
+    let sz = 32 * 1024 :: Int
+
+    let loadCRUD bs env
+          | BS.null bs = do
+                  bs' <- BS.hGet h sz
+                  if BS.null bs'
+                  then return env        -- done, done, done (EOF)
+                  else loadCRUD bs' env
+          | otherwise =
+                  parseCRUD (Atto.parse P.json bs) env
+        parseCRUD (Fail bs _ msg) env
+                | BS.all (isSpace . chr . fromIntegral) bs = loadCRUD BS.empty env
+                | otherwise = fail $ "parse error: " ++ msg
+        parseCRUD (Partial k) env = do
+                  bs <- BS.hGet h sz    
+                  parseCRUD (k bs) env
+        parseCRUD (Done bs r) env = do
+                  case fromJSON r of
+                    Error msg -> error msg
+                    Success update -> loadCRUD bs $! tableUpdate update env
+
+    loadCRUD BS.empty HashMap.empty 
+
+
+writeTableUpdate :: (ToJSON row, FromJSON row) => Handle -> TableUpdate row -> IO ()
+writeTableUpdate h row = do
+        LBS.hPutStr h (encode row)
+        LBS.hPutStr h "\n" -- just for prettyness, nothing else
+                     
+writeTable :: (ToJSON row, FromJSON row) => Handle -> Table row -> IO ()
+writeTable h table = sequence_
+        [ writeTableUpdate h $ RowUpdate (Named iD row)
+        | (iD,row) <- HashMap.toList table
+        ]
+
+------------------------------------------------------------------------------------
+-- CRUD
+
+
 
 {-
 -- ToDo:
@@ -200,7 +230,7 @@ openCRUD h = do
 createCRUD :: (FromJSON row, ToJSON row) => HashMap Text row -> IO (CRUD STM row)
 createCRUD = error ""
 
-datatypeCRUD :: forall m row . (Monad m, CRUDRow row) => CRUD m row -> CRUD m Object
+datatypeCRUD :: forall m row . (Monad m, ToJSON row, FromJSON row) => CRUD m row -> CRUD m Object
 datatypeCRUD crud = CRUD {}
      { createRow = return . toObject <=< createRow crud <=< fromObject
      , getRow    = \ iD -> do optRow <- getRow crud iD
@@ -272,7 +302,7 @@ tableUpdate (Shutdown msg)              = id
 
 -- It must be the case that toJSON never fails for any row (toJSON is total)
 -- and toJSON for a row must always returns an object.
-
+{-
 class (ToJSON row, FromJSON row) => CRUDRow row where
    lensID :: (Functor f) => (Text -> f Text) -> row -> f row
 
@@ -286,18 +316,6 @@ instance CRUDRow Object where
                    Just (String v) ->  v
                    _ -> "" -- by choice
 
+-}
 ----------------------------------------------------
-data Named row = Named Id row
-   deriving (Eq,Show)
 
-instance FromJSON row => FromJSON (Named row) where
-    parseJSON (Object v) = Named
-                <$> v .: "id"
-                <*> (parseJSON $ Object $ HashMap.delete "id" v)
-                
-instance ToJSON row => ToJSON (Named row) where                
-   toJSON (Named key row) = 
-                   case toJSON row of
-                     Object env -> Object $ HashMap.insert "id" (String key) env
-                     _ -> error "row should be an object"
-        

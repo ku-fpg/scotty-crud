@@ -81,7 +81,7 @@ data Env row = Env
         , debug    :: IO () -> IO ()
         }
 
-interpBind :: (CRUDRow row, Show row, Eq row) => CRUDAction row a -> (a -> CRUDAction row b) ->  Env row -> IO Bool
+interpBind :: (ToJSON row, FromJSON row, Show row, Eq row) => CRUDAction row a -> (a -> CRUDAction row b) ->  Env row -> IO Bool
 interpBind (GetRow iD) k env = do
         debug env $ putStrLn $ "GetRow " ++ show iD
         ans <- getRow (theCRUD env) iD
@@ -139,7 +139,7 @@ interpBind (Return a) k env = interp (k a) env
 interpBind (Bind m k2) k env = interpBind m (\ r -> Bind (k2 r) k) env
 interpBind other k env = error $ "interpBind: " ++ show other
 
-interp :: (CRUDRow row, Show row, Eq row) => CRUDAction row a ->  Env row -> IO Bool
+interp :: (ToJSON row, FromJSON row, Show row, Eq row) => CRUDAction row a ->  Env row -> IO Bool
 interp (Bind m k) env = interpBind m k env
 interp (Return _) env = do
         -- Does not breaking monad laws here, because this is the *final* return only.
