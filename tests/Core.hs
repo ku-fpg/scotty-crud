@@ -120,6 +120,13 @@ interpBind (GetId r) k env = interp (k (xs !! n)) env
 interpBind (Restart) k env = do
         debug env $ putStrLn "Restart"
         shutdown (theCRUD env) "restart"   -- wait until it is all done
+--        sync (theCRUD env) 
+	let loop = do
+		b <- hIsClosed (handle env)
+		if b then return () else do
+		        threadDelay (10 * 1000)
+			loop
+        loop
         -- Flush the buffer
 --        hFlush (handle env)
 --        hClose (handle env)
