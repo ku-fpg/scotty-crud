@@ -6,9 +6,12 @@ module Web.CRUD (
        -- * CRUD functions
        atomicCRUD,
        openCRUD,
+       createCRUD,
+       readOnlyCRUD,
        -- * Table functions
        readTable,
        writeTable,
+       -- * Table updates
        TableUpdate(..),
        tableUpdate,
        writeTableUpdate,
@@ -90,8 +93,7 @@ atomicCRUD crud = CRUD
 -- the subsuquent updates are recorded after the initial ones.
 -- There is no attempt a compaction; we only append to the file.
 -- 
--- Be careful: the default overloading of () for FromJSON
--- will never work, because ...
+-- Be careful: the default overloading of () for FromJSON will not work.
 
 openCRUD :: forall row . (Show row, ToJSON row, FromJSON row) => Handle -> IO (CRUD STM row)
 openCRUD h = do
@@ -155,7 +157,7 @@ openCRUD h = do
           case tu of
              Shutdown {} -> do
                      hClose h
-                     atomically $ putTMVar done ()   -- final act
+--                     atomically $ putTMVar done ()   -- final act
                      return ()
              _ -> loop
 
@@ -179,10 +181,104 @@ openCRUD h = do
      , shutdown = \ msg -> do
                      atomically $ do  -- request shutdown
                              updateCRUD (Shutdown msg)
-                     atomically $ do  -- wait for shutdown      
-                             takeTMVar done
+--                     atomically $ do  -- wait for shutdown      
+--                             takeTMVar done
      , sync = syncCRUD
      }
+
+
+actorCRUD :: (Show row, ToJSON row, FromJSON row) 
+	 => (TableUpdate row -> STM ())	   
+	 -> STM ()
+	 -> Table row	-- initial Table row
+	 -> IO (CRUD STM row)
+actorCRUD push waitForShutdown env = do
+
+    -- This is our table,
+    table <- newTVarIO env
+    updateChan <- newTChanIO
+    
+    let top :: STM Integer
+        top = do t <- readTVar table
+                 return $ foldr max 0
+                          [ read (Text.unpack k)
+                          | k <- HashMap.keys t
+                          , Text.all isDigit k
+                          ]
+
+    uniq <- atomically $ do
+               mx <- top
+               newTVar (mx + 1)
+
+    -- Get the next, uniq id when creating a row in the table.
+    let next :: STM Text           
+        next = do
+               n <- readTVar uniq
+               let iD = Text.pack (show n) :: Text
+               t <- readTVar table
+               if HashMap.member iD t
+               then do mx <- top
+                       t <- writeTVar uniq (mx + 1)
+                       next
+                 -- Great, we can use this value
+               else do writeTVar uniq $! (n + 1)
+                       return iD
+
+    let updateCRUD update = do
+          modifyTVar table (tableUpdate update)
+          push update
+
+    let handler m = m `catches`
+         []
+{-
+          [ {-Handler $ \ (ex :: SomeAsyncException) -> return ()
+          , -}Handler $ \ (ex :: SomeException) -> do { print ("X",ex) ; return (); } 
+                          -- print ("XX",ex) ; return () }
+          ]
+-}
+    flushed <- newTVarIO True
+    done <- newEmptyTMVarIO
+
+    let syncCRUD = do
+            flush_status <- readTVar flushed
+            chan_status <- isEmptyTChan updateChan
+            check (flush_status && chan_status)
+
+    return $ CRUD
+     { createRow = \ row    -> do iD <- next
+                                  let row' = Named iD row
+                                  updateCRUD (RowUpdate row')
+                                  return row'
+     , getRow    = \ iD     -> do t <- readTVar table
+                                  return $ fmap (Named iD) $ HashMap.lookup iD t
+     , getTable  =             do readTVar table
+     , updateRow = updateCRUD . RowUpdate 
+     , deleteRow = updateCRUD . RowDelete
+     , shutdown = \ msg -> do
+                     atomically $ do  -- request shutdown
+                             updateCRUD (Shutdown msg)
+                     atomically $ waitForShutdown
+     , sync = syncCRUD
+     }
+
+-- | create a CRUD without a backing store, based on an existing Table.
+
+createCRUD :: (FromJSON row, ToJSON row) => Table row -> IO (CRUD STM row)
+createCRUD = error ""
+
+-- | create a CRUD that does not honor write requests.
+-- This will call 'fail' for any attempted writes.
+readOnlyCRUD :: (Monad m) => CRUD m row -> CRUD m row
+readOnlyCRUD crud = CRUD 
+     { createRow = \ iD  -> fail "read only / createRow"
+     , getRow    = \ iD     -> getRow crud iD
+     , getTable  =             getTable crud
+     , updateRow = \ row -> fail "read only / updateRow"
+     , deleteRow = \ iD  -> fail "read only / deleteRow"
+     , sync      = sync crud
+     , shutdown =  shutdown crud
+     }
+
 
 ------------------------------------------------------------------------------------
 -- Table
@@ -250,6 +346,8 @@ tableUpdate (RowUpdate (Named key row)) = HashMap.insert key row
 tableUpdate (RowDelete key)             = HashMap.delete key
 tableUpdate (Shutdown msg)              = id
 
+
+
 ------------------------------------------------------------------------------------
 -- CRUD
 
@@ -258,8 +356,6 @@ tableUpdate (Shutdown msg)              = id
 {-
 -- ToDo:
 
-createCRUD :: (FromJSON row, ToJSON row) => HashMap Text row -> IO (CRUD STM row)
-createCRUD = error ""
 
 datatypeCRUD :: forall m row . (Monad m, ToJSON row, FromJSON row) => CRUD m row -> CRUD m Object
 datatypeCRUD crud = CRUD {}
@@ -285,16 +381,6 @@ datatypeCRUD crud = CRUD {}
 -}
 
 {-
--- | create a CRUD that does not honor write requests.
-readOnlyCRUD :: (Monad m) => CRUD m row -> CRUD m row
-readOnlyCRUD crud = CRUD 
-     { createRow = \ iD  -> fail ""
-     , getRow    = \ iD     -> getRow crud iD
-     , getTable  =             getTable crud
-     , updateRow = \ iD row -> fail ""
-     , deleteRow = \ iD     -> fail ""
-     , sync      = sync crud
-     }
 -}
 
 ----------------------------------------------------------------------
