@@ -46,7 +46,6 @@ data CRUD m row = CRUD
      , getTable               :: m (Table row)
      , updateRow :: Named row -> m ()
      , deleteRow :: Id        -> m () -- alway works
-     , shutdown  :: Text      -> IO ()  -- waits until shutdown complete (and persistant file(s) written to disk)
      }
 
 ------------------------------------------------------------------------------------
@@ -84,10 +83,7 @@ atomicCRUD crud = CRUD
      , getTable  = atomically $ getTable crud
      , updateRow = atomically . updateRow crud 
      , deleteRow = atomically . deleteRow crud
-     , shutdown  = shutdown crud
      }
-
-
 
 actorCRUD :: (ToJSON row, FromJSON row) 
 	 => (TableUpdate row -> STM ())	   
@@ -149,7 +145,6 @@ actorCRUD push env = do
      , getTable  =             do readTVar table
      , updateRow = updateCRUD . RowUpdate 
      , deleteRow = updateCRUD . RowDelete
-     , shutdown = \ _ -> return ()
      }
 
 -- | We store our CRUD in a simple format; a list of newline seperated
@@ -159,6 +154,8 @@ actorCRUD push env = do
 -- There is no attempt a compaction; we only append to the file.
 -- 
 -- Be careful: the default overloading of () for FromJSON will not work.
+--
+-- Be careful: The file handle open here never gets closed.
 
 persistantCRUD :: (FromJSON row, ToJSON row) => FilePath -> IO (CRUD STM row)
 persistantCRUD fileName = do
@@ -189,7 +186,6 @@ readOnlyCRUD crud = CRUD
      , getTable  =             getTable crud
      , updateRow = \ row -> fail "read only / updateRow"
      , deleteRow = \ iD  -> fail "read only / deleteRow"
-     , shutdown =  shutdown crud
      }
 
 

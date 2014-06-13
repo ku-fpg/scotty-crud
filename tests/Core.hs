@@ -23,7 +23,7 @@ import Data.Aeson
 import QC
 
 main = do
-        quickCheck (prop_crud PersistantCRUD)
+        quickCheck (prop_crud PersistantCRUD)   -- Done not close handle, so will leak handles when tested.
         quickCheck (prop_crud RestartingCRUD)
 
 slowCheck :: Testable prop => prop -> IO ()
@@ -82,6 +82,7 @@ data Env row = Env
         , oracle   :: [(Text,Named row)]
         , debug    :: IO () -> IO ()
         , restart  :: Env row -> IO (Env row)
+        , shutdown :: IO ()
         }
 
 interpBind :: (ToJSON row, FromJSON row, Show row, Eq row) => CRUDAction row a -> (a -> CRUDAction row b) ->  Env row -> IO Bool
@@ -139,7 +140,7 @@ interp :: (ToJSON row, FromJSON row, Show row, Eq row) => CRUDAction row a ->  E
 interp (Bind m k) env = interpBind m k env
 interp (Return _) env = do
         -- Does not breaking monad laws here, because this is the *final* return only.
-        shutdown (theCRUD env) "done"
+        shutdown env
         return True
 interp other      env = interpBind other Return env
 
@@ -160,7 +161,8 @@ runCRUDAction PersistantCRUD prog = do
         crud <- persistantCRUD test_json
         let debugging _ = return ()
         let restart env = return env
-        interp prog $ Env (atomicCRUD crud) [] [] debugging restart
+        let shutdown = return ()
+        interp prog $ Env (atomicCRUD crud) [] [] debugging restart shutdown
         -- We should check that the env in the file is the same as the model
         
 runCRUDAction RestartingCRUD prog = do
@@ -195,10 +197,11 @@ runCRUDAction RestartingCRUD prog = do
                 tab <- readTable h 
                 push <- writeableTableUpdate h
                 crud <- actorCRUD push tab
-                let env' = env { theCRUD = atomicCRUD crud, restart = restart' h push }
+                let env' = env { theCRUD = atomicCRUD crud, restart = restart' h push, shutdown = shutdown' push }
                 return env'
 
-        interp prog $ Env (atomicCRUD crud) [] [] debugging (restart' h push)
+            shutdown' push = atomically $ push (Shutdown "bye")
+        interp prog $ Env (atomicCRUD crud) [] [] debugging (restart' h push) (shutdown' push)
 
 
 
