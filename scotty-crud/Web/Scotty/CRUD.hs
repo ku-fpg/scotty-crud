@@ -1,4 +1,4 @@
-module Web.CRUD.Scotty where
+module Web.Scotty.CRUD where
 
 import Data.Aeson
 import Web.Scotty
@@ -12,13 +12,14 @@ import Web.CRUD
 -- > scottyCRUD "URL" (atomicCRUD crud)
 
 scottyCRUD :: (FromJSON row, ToJSON row) => String -> CRUD IO row -> ScottyM ()
-scottyCRUD url crud = return ()
+scottyCRUD url crud = do
 
-{-
         get (capture url) $ do 
+                tab <- getTable crud 
+                liftIO $ print tab        
                 return ()
         
-        get (capture $ url ++ "/:id") $ do return ()
--}                
+--        get (capture $ url ++ "/:id") $ do return ()
+
                 
 
