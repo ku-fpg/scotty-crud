@@ -23,7 +23,7 @@ import QC
 
 slowCheck = quickCheckWith stdArgs { maxSuccess = 1000 }
 
-main = slowCheck prop_crud
+main = slowCheck (prop_crud PersistantCRUD)
 
 -- Simple tests
 -- Saving, then loading again, will get back to the same CRUD.
@@ -79,7 +79,7 @@ data Env row = Env
         , ids      :: [Text]
         , oracle   :: [(Text,Named row)]
         , debug    :: IO () -> IO ()
---        , restart  :: 
+        , restart  :: Env row -> IO (Env row)
         }
 
 interpBind :: (ToJSON row, FromJSON row, Show row, Eq row) => CRUDAction row a -> (a -> CRUDAction row b) ->  Env row -> IO Bool
@@ -159,9 +159,12 @@ interp other      env = interpBind other Return env
 
 test_json = "tmp/test.json" :: String
 
+data CRUD_TEST_TYPE 
+        = PersistantCRUD        -- loading once, using the persistantCRUD function
+        | RestartingCRUD        -- loading many times.
 
-runCRUDAction :: CRUDAction Object () -> IO Bool
-runCRUDAction prog = do
+runCRUDAction :: CRUD_TEST_TYPE -> CRUDAction Object () -> IO Bool
+runCRUDAction ty prog = do
         -- First, clear the start
         b <- doesFileExist test_json
         if b
@@ -170,13 +173,14 @@ runCRUDAction prog = do
 
         crud <- persistantCRUD test_json
         let debugging _ = return ()
-        ans <- interp prog $ Env (atomicCRUD crud) test_json (error "h") [] [] debugging 
+        let restart env = return env
+        ans <- interp prog $ Env (atomicCRUD crud) test_json (error "h") [] [] debugging restart
         return ans      
 
-prop_crud :: Property
-prop_crud = monadicIO $ do
+prop_crud :: CRUD_TEST_TYPE -> Property
+prop_crud ty = monadicIO $ do
         code <- pick (generateTest 10 0)
-        ans <- run $ runCRUDAction code
+        ans <- run $ runCRUDAction ty code
         assert ans
         return ()      
 
