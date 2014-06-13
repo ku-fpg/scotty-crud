@@ -14,6 +14,7 @@ import qualified Data.HashMap.Strict as HashMap
 import Test.QuickCheck
 import Test.QuickCheck.Monadic (assert, monadicIO, pick, pre, run)
 import Test.QuickCheck.Function
+import Control.Concurrent.STM
 --TMP
 import Control.Concurrent (threadDelay)
 
@@ -179,8 +180,8 @@ runCRUDAction RestartingCRUD prog = do
         crud <- actorCRUD push $ HashMap.empty
 
         let debugging m = return ()
-        let restart' h env = do
-                shutdown (theCRUD env) "restart" 
+        let restart' h push env = do
+                atomically $ push (Shutdown "restart")
 
                 let loop = do
                         b <- hIsClosed h
@@ -194,10 +195,10 @@ runCRUDAction RestartingCRUD prog = do
                 tab <- readTable h 
                 push <- writeableTableUpdate h
                 crud <- actorCRUD push tab
-                let env' = env { theCRUD = atomicCRUD crud, restart = restart' h }
+                let env' = env { theCRUD = atomicCRUD crud, restart = restart' h push }
                 return env'
 
-        interp prog $ Env (atomicCRUD crud) [] [] debugging (restart' h)
+        interp prog $ Env (atomicCRUD crud) [] [] debugging (restart' h push)
 
 
 

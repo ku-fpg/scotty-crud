@@ -5,7 +5,6 @@ module Web.CRUD (
        Id, Table, Row, Named(..),
        -- * CRUD functions
        atomicCRUD,
-       openCRUD,
        actorCRUD,
        persistantCRUD,
        createCRUD,
@@ -88,104 +87,6 @@ atomicCRUD crud = CRUD
      , shutdown  = shutdown crud
      }
 
--- | We store our CRUD in a simple format; a list of newline seperated
--- JSON objects, in the order they were applied, where later objects
--- subsumes earlier ones. If the Handle provided is ReadWrite,
--- the subsuquent updates are recorded after the initial ones.
--- There is no attempt a compaction; we only append to the file.
--- 
--- Be careful: the default overloading of () for FromJSON will not work.
-
-openCRUD :: forall row . (Show row, ToJSON row, FromJSON row) => Handle -> IO (CRUD STM row)
-openCRUD h = do
-
-    env <- readTable h 
-
-    -- This is our table,
-    table <- newTVarIO env
-    updateChan <- newTChanIO
-    
-    let top :: STM Integer
-        top = do t <- readTVar table
-                 return $ foldr max 0
-                          [ read (Text.unpack k)
-                          | k <- HashMap.keys t
-                          , Text.all isDigit k
-                          ]
-
-    uniq <- atomically $ do
-               mx <- top
-               newTVar (mx + 1)
-
-    -- Get the next, uniq id when creating a row in the table.
-    let next :: STM Text           
-        next = do
-               n <- readTVar uniq
-               let iD = Text.pack (show n) :: Text
-               t <- readTVar table
-               if HashMap.member iD t
-               then do mx <- top
-                       t <- writeTVar uniq (mx + 1)
-                       next
-                 -- Great, we can use this value
-               else do writeTVar uniq $! (n + 1)
-                       return iD
-
-    let updateCRUD update = do
-          modifyTVar table (tableUpdate update)
-          writeTChan updateChan update
-
-    let handler m = m `catches`
-         []
-{-
-          [ {-Handler $ \ (ex :: SomeAsyncException) -> return ()
-          , -}Handler $ \ (ex :: SomeException) -> do { print ("X",ex) ; return (); } 
-                          -- print ("XX",ex) ; return () }
-          ]
--}
-    flushed <- newTVarIO True
-    done <- newEmptyTMVarIO
-
-    let loop = do
-          tu <- atomically $ do
---                  writeTVar flushed False
-                  readTChan updateChan
---          print $ "writing" ++ show tu
-          LBS.hPutStr h (encode tu)
-          LBS.hPutStr h "\n" -- just for prettyness, nothing else
-          hFlush h
---          atomically $ writeTVar flushed True
-          case tu of
-             Shutdown {} -> do
-                     hClose h
---                     atomically $ putTMVar done ()   -- final act
-                     return ()
-             _ -> loop
-
-    forkIO $ handler $ loop
-
-    let syncCRUD = do
-            flush_status <- readTVar flushed
-            chan_status <- isEmptyTChan updateChan
-            check (flush_status && chan_status)
-
-    return $ CRUD
-     { createRow = \ row    -> do iD <- next
-                                  let row' = Named iD row
-                                  updateCRUD (RowUpdate row')
-                                  return row'
-     , getRow    = \ iD     -> do t <- readTVar table
-                                  return $ fmap (Named iD) $ HashMap.lookup iD t
-     , getTable  =             do readTVar table
-     , updateRow = updateCRUD . RowUpdate 
-     , deleteRow = updateCRUD . RowDelete
-     , shutdown = \ msg -> do
-                     atomically $ do  -- request shutdown
-                             updateCRUD (Shutdown msg)
---                     atomically $ do  -- wait for shutdown      
---                             takeTMVar done
-     }
-
 
 
 actorCRUD :: (ToJSON row, FromJSON row) 
@@ -248,9 +149,7 @@ actorCRUD push env = do
      , getTable  =             do readTVar table
      , updateRow = updateCRUD . RowUpdate 
      , deleteRow = updateCRUD . RowDelete
-     , shutdown = \ msg -> do
-                     atomically $ do  -- request shutdown
-                             updateCRUD (Shutdown msg)
+     , shutdown = \ _ -> return ()
      }
 
 -- | We store our CRUD in a simple format; a list of newline seperated
