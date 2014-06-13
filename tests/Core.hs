@@ -21,9 +21,11 @@ import Data.Aeson
 
 import QC
 
-slowCheck = quickCheckWith stdArgs { maxSuccess = 1000 }
+main = do
+        quickCheck (prop_crud PersistantCRUD)
 
-main = slowCheck (prop_crud PersistantCRUD)
+slowCheck :: Testable prop => prop -> IO ()
+slowCheck = quickCheckWith stdArgs { maxSuccess = 1000 }
 
 -- Simple tests
 -- Saving, then loading again, will get back to the same CRUD.
@@ -74,8 +76,6 @@ instance Show row => Show (CRUDAction row a) where
 
 data Env row = Env 
         { theCRUD  :: CRUD IO row
-        , fileName :: FilePath
-        , handle   :: Handle
         , ids      :: [Text]
         , oracle   :: [(Text,Named row)]
         , debug    :: IO () -> IO ()
@@ -164,7 +164,7 @@ data CRUD_TEST_TYPE
         | RestartingCRUD        -- loading many times.
 
 runCRUDAction :: CRUD_TEST_TYPE -> CRUDAction Object () -> IO Bool
-runCRUDAction ty prog = do
+runCRUDAction PersistantCRUD prog = do
         -- First, clear the start
         b <- doesFileExist test_json
         if b
@@ -174,7 +174,7 @@ runCRUDAction ty prog = do
         crud <- persistantCRUD test_json
         let debugging _ = return ()
         let restart env = return env
-        ans <- interp prog $ Env (atomicCRUD crud) test_json (error "h") [] [] debugging restart
+        ans <- interp prog $ Env (atomicCRUD crud) [] [] debugging restart
         return ans      
 
 prop_crud :: CRUD_TEST_TYPE -> Property
@@ -183,17 +183,6 @@ prop_crud ty = monadicIO $ do
         ans <- run $ runCRUDAction ty code
         assert ans
         return ()      
-
-
-act :: CRUDAction Object ()
-act = do
-      CreateRow (HashMap.fromList [("x", Number 1),("y", Number 2)])  
-      id1 <- GetId 1
-      GetRow id1
-      GetRow "undefined"
-      CreateRow (HashMap.fromList [("x", Number 1),("y", Number 2)])  
-      id2 <- GetId 2
-      Assert (id1 /= id2) "ids from create should be unique"
 
 
 {-
