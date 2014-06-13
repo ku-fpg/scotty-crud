@@ -120,25 +120,9 @@ interpBind (GetId r) k env = interp (k (xs !! n)) env
                    , not (t `elem` (ids env))
                    ]
 interpBind (Restart) k env = do
-        interp (k ()) env 
-{-
         debug env $ putStrLn "Restart"
-        shutdown (theCRUD env) "restart"   -- wait until it is all done
---        sync (theCRUD env) 
-	let loop = do
-		b <- hIsClosed (handle env)
-		if b then return () else do
-		        threadDelay (10 * 1000)
-			loop
-        loop
-        -- Flush the buffer
---        hFlush (handle env)
---        hClose (handle env)
---        threadDelay (2 * 1000 * 1000)
-        h <- openBinaryFile test_json ReadWriteMode
-        crud <- openCRUD h
-        interp (k ()) (env { handle = h, theCRUD = atomicCRUD crud })
--}
+        env' <- restart env env
+        interp (k ()) env' 
 
 interpBind (Assert b msg) k env = do
         if b
@@ -187,16 +171,36 @@ runCRUDAction RestartingCRUD prog = do
 
         -- new file
         h <- openBinaryFile test_json WriteMode
-
+        
         -- Now, write any changes after what you have read, in the same file
         push <- writeableTableUpdate h
-
+        
         -- Finally, set of the CRUD object
         crud <- actorCRUD push $ HashMap.empty
 
-        let debugging _ = return ()
-        let restart env = return env
-        interp prog $ Env (atomicCRUD crud) [] [] debugging restart
+        let debugging m = return ()
+        let restart' h env = do
+                shutdown (theCRUD env) "restart" 
+
+                let loop = do
+                        b <- hIsClosed h
+                        if b 
+                        then return () 
+                        else do threadDelay (10 * 1000)
+                                loop
+                loop
+
+                h <- openBinaryFile test_json ReadWriteMode
+                tab <- readTable h 
+                push <- writeableTableUpdate h
+                crud <- actorCRUD push tab
+                let env' = env { theCRUD = atomicCRUD crud, restart = restart' h }
+                return env'
+
+        interp prog $ Env (atomicCRUD crud) [] [] debugging (restart' h)
+
+
+
 
 prop_crud :: CRUD_TEST_TYPE -> Property
 prop_crud ty = monadicIO $ do
