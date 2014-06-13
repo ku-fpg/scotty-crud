@@ -23,7 +23,7 @@ import Data.Aeson
 import QC
 
 main = do
-        quickCheck (prop_crud PersistantCRUD)   -- Done not close handle, so will leak handles when tested.
+--        quickCheck (prop_crud PersistantCRUD)   -- Done not close handle, so will leak handles when tested.
         quickCheck (prop_crud RestartingCRUD)
 
 slowCheck :: Testable prop => prop -> IO ()
