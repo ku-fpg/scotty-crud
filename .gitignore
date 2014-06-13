@@ -13,3 +13,4 @@ cabal.config
 tests/tmp/
 \#*
 \#*\#
+scotty-crud.wiki/
