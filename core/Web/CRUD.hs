@@ -6,6 +6,7 @@ module Web.CRUD (
        -- * CRUD functions
        atomicCRUD,
        openCRUD,
+       actorCRUD,
        persistantCRUD,
        createCRUD,
        readOnlyCRUD,
@@ -16,6 +17,7 @@ module Web.CRUD (
        TableUpdate(..),
        tableUpdate,
        writeTableUpdate,
+       writeableTableUpdate,
        ) where
 
 import Data.Aeson

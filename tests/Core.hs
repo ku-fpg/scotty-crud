@@ -23,6 +23,7 @@ import QC
 
 main = do
         quickCheck (prop_crud PersistantCRUD)
+        quickCheck (prop_crud RestartingCRUD)
 
 slowCheck :: Testable prop => prop -> IO ()
 slowCheck = quickCheckWith stdArgs { maxSuccess = 1000 }
@@ -174,8 +175,28 @@ runCRUDAction PersistantCRUD prog = do
         crud <- persistantCRUD test_json
         let debugging _ = return ()
         let restart env = return env
-        ans <- interp prog $ Env (atomicCRUD crud) [] [] debugging restart
-        return ans      
+        interp prog $ Env (atomicCRUD crud) [] [] debugging restart
+        -- We should check that the env in the file is the same as the model
+        
+runCRUDAction RestartingCRUD prog = do
+        -- First, clear the start
+        b <- doesFileExist test_json
+        if b
+        then removeFile test_json
+        else return ()
+
+        -- new file
+        h <- openBinaryFile test_json WriteMode
+
+        -- Now, write any changes after what you have read, in the same file
+        push <- writeableTableUpdate h
+
+        -- Finally, set of the CRUD object
+        crud <- actorCRUD push $ HashMap.empty
+
+        let debugging _ = return ()
+        let restart env = return env
+        interp prog $ Env (atomicCRUD crud) [] [] debugging restart
 
 prop_crud :: CRUD_TEST_TYPE -> Property
 prop_crud ty = monadicIO $ do
