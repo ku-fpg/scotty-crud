@@ -7,7 +7,6 @@ module Web.CRUD (
        atomicCRUD,
        actorCRUD,
        persistantCRUD,
-       createCRUD,
        readOnlyCRUD,
        -- * Table functions
        readTable,
@@ -17,6 +16,9 @@ module Web.CRUD (
        tableUpdate,
        writeTableUpdate,
        writeableTableUpdate,
+       -- * SQL-style SELECT
+       SELECT(..),
+       select
        ) where
 
 import Data.Aeson
@@ -43,11 +45,10 @@ import System.IO
 data CRUD m row = CRUD
      { createRow :: row       -> m (Named row)
      , getRow    :: Id        -> m (Maybe (Named row))
-     , getTable               :: m (Table row)
+     , getTable  ::              m (Table row)
      , updateRow :: Named row -> m ()
      , deleteRow :: Id        -> m () -- alway works
      }
-
 ------------------------------------------------------------------------------------
 -- Basic synonyms for key structures 
 --
@@ -142,7 +143,7 @@ actorCRUD push env = do
                                   return row'
      , getRow    = \ iD     -> do t <- readTVar table
                                   return $ fmap (Named iD) $ HashMap.lookup iD t
-     , getTable  =             do readTVar table
+     , getTable  = do readTVar table
      , updateRow = updateCRUD . RowUpdate 
      , deleteRow = updateCRUD . RowDelete
      }
@@ -172,18 +173,13 @@ persistantCRUD fileName = do
         actorCRUD push tab
 
 
--- | create a CRUD without a backing store, based on an existing Table.
-
-createCRUD :: (FromJSON row, ToJSON row) => Table row -> IO (CRUD STM row)
-createCRUD = error ""
-
 -- | create a CRUD that does not honor write requests.
 -- This will call 'fail' for any attempted writes.
 readOnlyCRUD :: (Monad m) => CRUD m row -> CRUD m row
 readOnlyCRUD crud = CRUD 
      { createRow = \ iD  -> fail "read only / createRow"
      , getRow    = \ iD     -> getRow crud iD
-     , getTable  =             getTable crud
+     , getTable  = getTable crud
      , updateRow = \ row -> fail "read only / updateRow"
      , deleteRow = \ iD  -> fail "read only / deleteRow"
      }
@@ -278,3 +274,20 @@ tableUpdate (RowUpdate (Named key row)) = HashMap.insert key row
 tableUpdate (RowDelete key)             = HashMap.delete key
 tableUpdate (Shutdown msg)              = id
 
+------------------------------------------------------------------------------------
+-- SQL-style SELECT
+
+-- SQL-style selectors
+data SELECT = SELECT [Text]                    -- ^ Only return listed fields
+            | SORTBY Text                      -- ^ sort on a field, field needs to be present
+            | LIMIT Int                        -- ^ Only give n answers
+            | DROP  Int                        -- ^ ignore the first n answers
+
+select :: [SELECT] -> [Row] -> [Row]
+select ss rows = foldl sel rows ss
+  where sel rows (SELECT ns) = fmap (\ row -> HashMap.fromList [ (k,v) | (k,v) <- HashMap.toList row, k `elem` ns]) rows
+        sel rows (SORTBY ns) = rows
+        sel rows (DROP n)    = drop n rows
+        sel rows (LIMIT n)   = Prelude.take n rows
+        
+        
