@@ -53,6 +53,12 @@ data CRUD m row = CRUD
 -- Basic synonyms for key structures 
 --
 type Id        = Text
+
+-- | a Table is a HashMap of Ids to rows, typically 'Table Row'.
+--   The elems of the Table do not contain, by default, the Id, because this
+--   is how you index a row. Note that the output of a complete table,
+--   via RESTful CRUD, injects the Id into the row.
+
 type Table row = HashMap Id row
 type Row       = Object
 
