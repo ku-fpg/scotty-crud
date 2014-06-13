@@ -6,6 +6,7 @@ module Web.CRUD (
        -- * CRUD functions
        atomicCRUD,
        openCRUD,
+       persistantCRUD,
        createCRUD,
        readOnlyCRUD,
        -- * Table functions
@@ -45,7 +46,6 @@ data CRUD m row = CRUD
      , updateRow :: Named row -> m ()
      , deleteRow :: Id        -> m () -- alway works
      , shutdown  :: Text      -> IO ()  -- waits until shutdown complete (and persistant file(s) written to disk)
-     , sync                   :: m ()
      }
 
 ------------------------------------------------------------------------------------
@@ -84,7 +84,6 @@ atomicCRUD crud = CRUD
      , updateRow = atomically . updateRow crud 
      , deleteRow = atomically . deleteRow crud
      , shutdown  = shutdown crud
-     , sync      = atomically $ sync crud
      }
 
 -- | We store our CRUD in a simple format; a list of newline seperated
@@ -183,18 +182,16 @@ openCRUD h = do
                              updateCRUD (Shutdown msg)
 --                     atomically $ do  -- wait for shutdown      
 --                             takeTMVar done
-     , sync = syncCRUD
      }
 
 
-actorCRUD :: (Show row, ToJSON row, FromJSON row) 
+
+actorCRUD :: (ToJSON row, FromJSON row) 
 	 => (TableUpdate row -> STM ())	   
-	 -> STM ()
 	 -> Table row	-- initial Table row
 	 -> IO (CRUD STM row)
-actorCRUD push waitForShutdown env = do
+actorCRUD push env = do
 
-    -- This is our table,
     table <- newTVarIO env
     updateChan <- newTChanIO
     
@@ -239,11 +236,6 @@ actorCRUD push waitForShutdown env = do
     flushed <- newTVarIO True
     done <- newEmptyTMVarIO
 
-    let syncCRUD = do
-            flush_status <- readTVar flushed
-            chan_status <- isEmptyTChan updateChan
-            check (flush_status && chan_status)
-
     return $ CRUD
      { createRow = \ row    -> do iD <- next
                                   let row' = Named iD row
@@ -257,9 +249,30 @@ actorCRUD push waitForShutdown env = do
      , shutdown = \ msg -> do
                      atomically $ do  -- request shutdown
                              updateCRUD (Shutdown msg)
-                     atomically $ waitForShutdown
-     , sync = syncCRUD
      }
+
+-- | We store our CRUD in a simple format; a list of newline seperated
+-- JSON objects, in the order they were applied, where later objects
+-- subsumes earlier ones. If the Handle provided is ReadWrite,
+-- the subsuquent updates are recorded after the initial ones.
+-- There is no attempt a compaction; we only append to the file.
+-- 
+-- Be careful: the default overloading of () for FromJSON will not work.
+
+persistantCRUD :: (FromJSON row, ToJSON row) => FilePath -> IO (CRUD STM row)
+persistantCRUD fileName = do
+        h <- openBinaryFile fileName ReadWriteMode
+        -- Read what you can, please, into a Table.
+        tab <- readTable h 
+
+        -- check for EOF & writeable, etc
+
+        -- Now, write any changes after what you have read, in the same file
+        push <- writeableTableUpdate h
+
+        -- Finally, set of the CRUD object
+        actorCRUD push tab
+
 
 -- | create a CRUD without a backing store, based on an existing Table.
 
@@ -275,7 +288,6 @@ readOnlyCRUD crud = CRUD
      , getTable  =             getTable crud
      , updateRow = \ row -> fail "read only / updateRow"
      , deleteRow = \ iD  -> fail "read only / deleteRow"
-     , sync      = sync crud
      , shutdown =  shutdown crud
      }
 
@@ -321,6 +333,29 @@ writeTable h table = sequence_
         | (iD,row) <- HashMap.toList table
         ]
 
+-- TODO: what happens if the TableUpdate contains _|_?
+-- Perhaps there should be a deepseq requrement on the argument?
+writeableTableUpdate :: (ToJSON row) => Handle -> IO (TableUpdate row -> STM ())
+writeableTableUpdate h = do
+    updateChan <- newTChanIO
+
+    let loop = do
+          tu <- atomically $ do
+                  readTChan updateChan
+--          print $ "writing" ++ show tu
+          LBS.hPutStr h (encode tu)
+          LBS.hPutStr h "\n" -- just for prettyness, nothing else
+          hFlush h
+          case tu of
+             Shutdown {} -> do
+                     hClose h
+                     return ()
+             _ -> loop
+
+    forkIO $ loop
+    
+    return $ writeTChan updateChan
+
 -- Changes all all either an update (create a new field if needed) or a delete.
 
 data TableUpdate row
@@ -345,64 +380,4 @@ tableUpdate :: TableUpdate row -> Table row -> Table row
 tableUpdate (RowUpdate (Named key row)) = HashMap.insert key row
 tableUpdate (RowDelete key)             = HashMap.delete key
 tableUpdate (Shutdown msg)              = id
-
-
-
-------------------------------------------------------------------------------------
--- CRUD
-
-
-
-{-
--- ToDo:
-
-
-datatypeCRUD :: forall m row . (Monad m, ToJSON row, FromJSON row) => CRUD m row -> CRUD m Object
-datatypeCRUD crud = CRUD {}
-     { createRow = return . toObject <=< createRow crud <=< fromObject
-     , getRow    = \ iD -> do optRow <- getRow crud iD
-                              case optRow of
-                                Nothing -> return Nothing
-                                Just row -> liftM Just $ return $ toObject row
-     , getTable = liftM (fmap toObject) $ getTable crud
-     , updateRow = \ iD -> updateRow crud iD <=< fromObject
-     , deleteRow = deleteRow crud
-     , sync      = sync crud
-     }
- 
- where toObject :: NamedRow row -> Object
-       toObject r = case toJSON r of
-                  Object obj -> obj
-                  _ -> error "row is not representable as an Object"
-       fromObject :: Object -> m row
-       fromObject obj = case fromJSON (Object obj) of
-                       Success r -> return r
-                       Error err -> fail err
--}
-
-{-
--}
-
-----------------------------------------------------------------------
-
-----------------------------------------------------
-
--- It must be the case that toJSON never fails for any row (toJSON is total)
--- and toJSON for a row must always returns an object.
-{-
-class (ToJSON row, FromJSON row) => CRUDRow row where
-   lensID :: (Functor f) => (Text -> f Text) -> row -> f row
-
--- (CRUDRow row) => toJSON row /= _|_
--- (CRUDRow row) => toJSON row == Object {...}
-
-
-instance CRUDRow Object where
-   lensID f m = (\ v' -> HashMap.insert "id" (String v') m) <$> f v
-       where v = case HashMap.lookup "id" m of
-                   Just (String v) ->  v
-                   _ -> "" -- by choice
-
--}
-----------------------------------------------------
 

@@ -79,6 +79,7 @@ data Env row = Env
         , ids      :: [Text]
         , oracle   :: [(Text,Named row)]
         , debug    :: IO () -> IO ()
+--        , restart  :: 
         }
 
 interpBind :: (ToJSON row, FromJSON row, Show row, Eq row) => CRUDAction row a -> (a -> CRUDAction row b) ->  Env row -> IO Bool
@@ -118,6 +119,8 @@ interpBind (GetId r) k env = interp (k (xs !! n)) env
                    , not (t `elem` (ids env))
                    ]
 interpBind (Restart) k env = do
+        interp (k ()) env 
+{-
         debug env $ putStrLn "Restart"
         shutdown (theCRUD env) "restart"   -- wait until it is all done
 --        sync (theCRUD env) 
@@ -134,7 +137,7 @@ interpBind (Restart) k env = do
         h <- openBinaryFile test_json ReadWriteMode
         crud <- openCRUD h
         interp (k ()) (env { handle = h, theCRUD = atomicCRUD crud })
-        
+-}
 
 interpBind (Assert b msg) k env = do
         if b
@@ -164,18 +167,15 @@ runCRUDAction prog = do
         if b
         then removeFile test_json
         else return ()
-        h <- openBinaryFile test_json ReadWriteMode
-        crud <- openCRUD h
+
+        crud <- persistantCRUD test_json
         let debugging _ = return ()
---        let debugging = id
-        ans <- interp prog $ Env (atomicCRUD crud) test_json h [] [] debugging 
+        ans <- interp prog $ Env (atomicCRUD crud) test_json (error "h") [] [] debugging 
         return ans      
 
 prop_crud :: Property
 prop_crud = monadicIO $ do
         code <- pick (generateTest 10 0)
---        run $ putStrLn "\n"
---        run $ print code
         ans <- run $ runCRUDAction code
         assert ans
         return ()      
