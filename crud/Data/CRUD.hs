@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings, ScopedTypeVariables, TypeFamilies, TypeSynonymInstances, FlexibleInstances #-}
-module Web.CRUD (
+module Data.CRUD (
        -- * Basic types
        CRUD(..),
        Id, Table, Row, Named(..),

@@ -1,7 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Main where
 
-import Web.CRUD
+import Data.CRUD
 import System.IO
 
 -- Read from stdin, send to stdout

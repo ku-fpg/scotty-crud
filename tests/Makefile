@@ -1,3 +1,3 @@
 boot::
 	mkdir -p tmp
-	ghci -i.:../core Core.hs 
+	ghci -i.:../crud Core.hs 

@@ -4,7 +4,7 @@ module Main where
 
 import qualified Data.Text as Text
 import Data.Text(Text,pack)
-import Web.CRUD
+import Data.CRUD
 import System.IO
 import System.Directory
 import Control.Applicative
