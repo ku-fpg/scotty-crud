@@ -13,8 +13,11 @@ cabal.config
 tests/tmp/
 \#*
 \#*\#
-scotty-crud.wiki/
+crud.wiki/
 notes/
 shared-sandbox/
+keep/
+tmp/
+
 
 
