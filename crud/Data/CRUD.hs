@@ -18,6 +18,7 @@ module Data.CRUD (
        writeableTableUpdate,
        -- * SQL-style SELECT
        SELECT(..),
+       SORT_MOD(..),
        select
        ) where
 
@@ -53,6 +54,7 @@ data CRUD m row = CRUD
 ------------------------------------------------------------------------------------
 -- Basic synonyms for key structures 
 --
+-- | Every (Named) Row must have an id field.
 type Id        = Text
 
 -- | a Table is a HashMap of Ids to rows, typically 'Table Row'.
@@ -61,6 +63,8 @@ type Id        = Text
 --   via RESTful CRUD, injects the Id into the row.
 
 type Table row = HashMap Id row
+
+-- | The default row is a aeson JSON object.
 type Row       = Object
 
 ------------------------------------------------------------------------------------
@@ -284,13 +288,14 @@ tableUpdate (Shutdown msg)              = id
 ------------------------------------------------------------------------------------
 -- SQL-style SELECT
 
--- SQL-style selectors
+-- | SQL-style DSL
 data SELECT = SELECT [Text]                    -- ^ Only return listed fields
             | SORT_BY Text [SORT_MOD]          -- ^ sort on a field
             | TAKE Int                         -- ^ Only give n answers
             | DROP Int                         -- ^ ignore the first n answers
             deriving (Eq, Ord, Show, Read)
 
+-- | execute the SQL DSL, from left to right.
 select :: [SELECT] -> [Row] -> [Row]
 select ss rows = foldl sel rows ss
   where sel rows (SELECT ns)     = fmap (\ row -> HashMap.fromList [ (k,v) | (k,v) <- HashMap.toList row, k `elem` ns]) rows
