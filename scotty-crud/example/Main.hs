@@ -13,7 +13,7 @@ import Data.Monoid (mconcat)
 main = scotty 3000 $ do
 
   users  <- liftIO $ actorCRUD (\ _ -> return ())
-                      (HashMap.fromList [("foo",HashMap.fromList [("x", Number 123)])] :: Table Row)
+                      (HashMap.fromList [("foo",HashMap.fromList [("firstname", "Bla"),("lastname","Bllllab"),("age", Number 123)])] :: Table Row)
 
   scottyCRUD "/users" (atomicCRUD users)
 
