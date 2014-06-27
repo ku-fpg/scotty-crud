@@ -1,7 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Main where
 
-import Data.CRUD
+import Web.Scotty.CRUD
 import System.IO
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Set as Set
