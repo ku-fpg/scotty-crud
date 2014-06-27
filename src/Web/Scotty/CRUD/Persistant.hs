@@ -1,4 +1,23 @@
 {-# LANGUAGE OverloadedStrings, ScopedTypeVariables, TypeFamilies, TypeSynonymInstances, FlexibleInstances #-}
+
+-- | Persistant is a sample implementation of a CRUD. The file format is a flat file of JSON records,
+--  with changes appended to the end of the file only. There is always an "id" field, a later records
+--  (as per the "id" value) overwrite earlier records.
+--
+-- >{"id":"ABCD","firstname":"Roger","lastname":"Rabbit","age",21} 
+--
+-- These JSON records/rows are stored on individual lines in the file, for readability only.
+-- Note that the list of records is not a JSON array, because we support appending to a file.
+-- 
+-- There are two other kinds of records in the file: delete records and shutdown records.
+--  
+-- >{ "delete":"<ID>" }  -- deletes the <ID>
+-- >{ "shutdown":"<message>" } -- informational only; no semantics
+-- 
+-- A compressed/normalized file will never contain any deletes or shutdowns.
+--
+-- This (textual) file format will work well with version control.
+--
 module Web.Scotty.CRUD.Persistant (
        -- * CRUD functions
        atomicCRUD,
@@ -57,6 +76,10 @@ atomicCRUD crud = CRUD
      , updateRow = atomically . updateRow crud 
      , deleteRow = atomically . deleteRow crud
      }
+
+-- | Build an actor behind a CRUD object. This object
+--   starts with the given table, and sends update events
+--   to the provided higher-order update function.
 
 actorCRUD :: (ToJSON row, FromJSON row) 
 	 => (TableUpdate row -> STM ())	   
