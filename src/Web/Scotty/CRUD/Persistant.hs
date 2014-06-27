@@ -1,10 +1,5 @@
 {-# LANGUAGE OverloadedStrings, ScopedTypeVariables, TypeFamilies, TypeSynonymInstances, FlexibleInstances #-}
-module Web.Scotty.CRUD (
-       -- * CRUD service
-       scottyCRUD,
-       -- * Basic types
-       CRUD(..),
-       Id, Table, Row, Named(..),
+module Web.Scotty.CRUD.Persistant (
        -- * CRUD functions
        atomicCRUD,
        actorCRUD,
@@ -17,11 +12,7 @@ module Web.Scotty.CRUD (
        TableUpdate(..),
        tableUpdate,
        writeTableUpdate,
-       writeableTableUpdate,
-       -- * SQL-style SELECT
-       SELECT(..),
-       SORT_MOD(..),
-       select
+       writeableTableUpdate
        ) where
 
 import Data.Aeson
@@ -52,48 +43,7 @@ import Data.Monoid
 import Network.HTTP.Types.Status (status204)
 import Network.HTTP.Types ( StdMethod( OPTIONS ) )
 
-------------------------------------------------------------------------------------
--- | A CRUD is a OO-style database Table of typed rows, with getters and setters. 
---   The default row is a JSON Object.
-data CRUD m row = CRUD
-     { createRow :: row       -> m (Named row)
-     , getRow    :: Id        -> m (Maybe (Named row))
-     , getTable  ::              m (Table row)
-     , updateRow :: Named row -> m ()
-     , deleteRow :: Id        -> m () -- alway works
-     }
-------------------------------------------------------------------------------------
--- Basic synonyms for key structures 
---
--- | Every (Named) Row must have an id field.
-type Id        = Text
-
--- | a Table is a HashMap of Ids to rows, typically 'Table Row'.
---   The elems of the Table do not contain, by default, the Id, because this
---   is how you index a row. Note that the output of a complete table,
---   via RESTful CRUD, injects the Id into the row.
-
-type Table row = HashMap Id row
-
--- | The default row is a aeson JSON object.
-type Row       = Object
-
-------------------------------------------------------------------------------------
--- | A pair of Name(Id) and row.
-data Named row = Named Id row
-   deriving (Eq,Show)
-
-instance FromJSON row => FromJSON (Named row) where
-    parseJSON (Object v) = Named
-                <$> v .: "id"
-                <*> (parseJSON $ Object $ HashMap.delete "id" v)
-                
-instance ToJSON row => ToJSON (Named row) where                
-   toJSON (Named key row) = 
-                   case toJSON row of
-                     Object env -> Object $ HashMap.insert "id" (String key) env
-                     _ -> error "row should be an object"
-
+import Web.Scotty.CRUD
 
 ------------------------------------------------------------------------------------
 -- CRUD functions
@@ -296,111 +246,4 @@ tableUpdate (RowUpdate (Named key row)) = HashMap.insert key row
 tableUpdate (RowDelete key)             = HashMap.delete key
 tableUpdate (Shutdown msg)              = id
 
-------------------------------------------------------------------------------------
--- SQL-style SELECT
 
--- | SQL-style DSL
-data SELECT = SELECT [Text]                    -- ^ Only return listed fields
-            | SORT_BY Text [SORT_MOD]          -- ^ sort on a field
-            | TAKE Int                         -- ^ Only give n answers
-            | DROP Int                         -- ^ ignore the first n answers
-            deriving (Eq, Ord, Show, Read)
-
--- | execute the SQL DSL, from left to right.
-select :: [SELECT] -> [Row] -> [Row]
-select ss rows = foldl sel rows ss
-  where sel rows (SELECT ns)     = fmap (\ row -> HashMap.fromList [ (k,v) | (k,v) <- HashMap.toList row, k `elem` ns]) rows
-        sel rows (SORT_BY nm ms) 
-                | NUM `elem` ms && DESC `elem` ms = sort_by desc $ prep num 
-                | NUM `elem` ms                   = sort_by desc $ prep num 
-                |                  DESC `elem` ms = sort_by asc  $ prep txt
-                | otherwise                       = sort_by asc  $ prep txt 
-          where 
-                 asc  a b = fst a `compare` fst b
-                 desc a b = fst b `compare` fst a
-
-                 num :: Row -> Maybe Scientific
-                 num row = case HashMap.lookup nm row of
-                            Just (Number n)   -> return n
-                            Just (String txt) -> case reads $ Text.unpack txt of
-                                                   [(a::Scientific,"")] -> Just a
-                                                   _                    -> Nothing
-                            _                 -> Nothing
-
-                 txt :: Row -> Maybe Text
-                 txt row = case HashMap.lookup nm row of
-                            Just (String txt) -> return txt
-                            Just (Number n)   -> return $ Text.pack $ show n
-                            Just (Bool b)     -> return $ Text.pack $ show b
-                            _                 -> Nothing
-
-                 sort_by :: (Ord a) => ((a,b) -> (a,b) -> Ordering) -> [(a,b)] -> [b]
-                 sort_by cmp = map snd . sortBy cmp
-
-                 prep :: forall a . (Row -> a) -> [(a,Row)]                      
-                 prep p = map (\ v -> (p v,v)) rows
-                              
-
-data SORT_MOD = NUM | DESC
-        deriving (Eq, Ord, Show, Read)
-
-
-
--- | scottyCRUD provides scotty support for a CRUD object.
--- 
--- > crud <- liftIO $ persistantCRUD "filename"
--- > scottyCRUD "URL" (atomicCRUD crud)
-
-scottyCRUD :: (Show row, FromJSON row, ToJSON row) => String -> CRUD IO row -> ScottyM ()
-scottyCRUD url crud = do
-        let xRequest = do
-               addHeader "Access-Control-Allow-Headers" "X-Requested-With, Content-Type, Accep"
-               addHeader "Access-Control-Allow-Methods" "POST, GET, PUT, DELETE, OPTIONS"
-               addHeader "Access-Control-Allow-Origin"  "*"
-
-        post (capture url) $ do
-                xRequest
-                dat <- jsonData
-                namedRow <- liftIO $ createRow crud dat
-                Scotty.json namedRow
-
-        get (capture url) $ do 
-                xRequest
-                tab <- liftIO $ getTable crud
-                Scotty.json $ [ Named k v | (k,v) <- HashMap.toList $ tab ]
-        
-        get (capture (url <> "/:id")) $ do 
-                xRequest
-                iD <- param "id"
-                opt_row <- liftIO $ getRow crud iD
-                case opt_row of
-                  Nothing -> next
-                  Just namedRow -> Scotty.json $ namedRow
-                liftIO $ print $ opt_row
-
-        put (capture (url <> "/:id")) $ do 
-                xRequest
-                dat <- jsonData
-                () <- liftIO $ updateRow crud dat
-                Scotty.json dat
-                
-        delete (capture (url <> "/:id")) $ do 
-                xRequest
-                iD <- param "id"
-                () <- liftIO $ deleteRow crud iD
-                status $ status204
-                raw ""
-
-
-        addroute OPTIONS (capture url) $ do
-                xRequest
-                text "OK"
-
-        addroute OPTIONS (capture (url <> "/:id")) $ do
-                xRequest
-                text "OK"
-
-
---        get (capture $ url ++ "/:id") $ do return ()
-
-                
