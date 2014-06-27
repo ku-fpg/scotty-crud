@@ -12,7 +12,7 @@ cabal-version:       >=1.10
 
 library
   exposed-modules:     Web.Scotty.CRUD, 
-                       Web.Scotty.CRUD.Persistant,
+                       Web.Scotty.CRUD.JSON,
                        Web.Scotty.CRUD.Types
   -- other-modules:       
   other-extensions:    OverloadedStrings, ScopedTypeVariables, TypeFamilies, TypeSynonymInstances, FlexibleInstances

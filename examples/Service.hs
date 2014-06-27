@@ -7,7 +7,7 @@ import Data.HashMap.Strict as HashMap
 import Control.Monad.IO.Class (liftIO) 
 
 import Web.Scotty.CRUD
-import Web.Scotty.CRUD.Persistant (actorCRUD, atomicCRUD)
+import Web.Scotty.CRUD.JSON (actorCRUD, atomicCRUD)
 
 import Data.Monoid (mconcat)
 

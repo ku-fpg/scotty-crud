@@ -2,7 +2,7 @@
 module Main where
 
 import Web.Scotty.CRUD
-import Web.Scotty.CRUD.Persistant
+import Web.Scotty.CRUD.JSON
 import System.IO
 
 -- Read from stdin, send to stdout

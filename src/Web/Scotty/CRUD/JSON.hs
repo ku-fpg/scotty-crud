@@ -18,7 +18,7 @@
 --
 -- This (textual) file format will work well with version control.
 --
-module Web.Scotty.CRUD.Persistant (
+module Web.Scotty.CRUD.JSON (
        -- * CRUD functions
        atomicCRUD,
        actorCRUD,
