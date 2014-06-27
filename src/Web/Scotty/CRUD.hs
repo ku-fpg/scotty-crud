@@ -7,33 +7,15 @@ module Web.Scotty.CRUD (
        Id, Table, Row, Named(..)
        ) where
 
-import Data.Aeson
-import Data.Aeson.Parser as P
-import Data.Attoparsec.ByteString as Atto
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Lazy as LBS
-import qualified Data.HashMap.Strict as HashMap
-import Data.HashMap.Strict (HashMap)
-import Control.Applicative
-import Data.Char (isSpace, isDigit, chr)
-import Data.List (foldl', sortBy)
-import Data.Text (Text, pack)
-import Control.Monad
-import qualified Data.Text as Text
-import Control.Concurrent.STM
-import Control.Concurrent
-import Control.Exception
-import System.IO
-import Data.Scientific
 
--- Scotty stuff
-import Data.Aeson hiding (json)
-import Web.Scotty as Scotty
+import Data.Aeson
 import qualified Data.HashMap.Strict as HashMap
 import Control.Monad.IO.Class (liftIO) 
 import Data.Monoid
 import Network.HTTP.Types.Status (status204)
 import Network.HTTP.Types ( StdMethod( OPTIONS ) )
+
+import Web.Scotty as Scotty
 
 import Web.Scotty.CRUD.Types
 

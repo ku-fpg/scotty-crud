@@ -1,36 +1,15 @@
 {-# LANGUAGE OverloadedStrings, ScopedTypeVariables, TypeFamilies, TypeSynonymInstances, FlexibleInstances #-}
 module Web.Scotty.CRUD.Types (
        CRUD(..),
-       Id, Table, Row, Named(..)
+       Id, Table, Row, Named(..),
+       namedRowToRow, rowToNamedRow
        ) where
 
 import Data.Aeson
-import Data.Aeson.Parser as P
-import Data.Attoparsec.ByteString as Atto
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Lazy as LBS
-import qualified Data.HashMap.Strict as HashMap
 import Data.HashMap.Strict (HashMap)
 import Control.Applicative
-import Data.Char (isSpace, isDigit, chr)
-import Data.List (foldl', sortBy)
-import Data.Text (Text, pack)
-import Control.Monad
-import qualified Data.Text as Text
-import Control.Concurrent.STM
-import Control.Concurrent
-import Control.Exception
-import System.IO
-import Data.Scientific
-
--- Scotty stuff
-import Data.Aeson hiding (json)
-import Web.Scotty as Scotty
+import Data.Text(Text)
 import qualified Data.HashMap.Strict as HashMap
-import Control.Monad.IO.Class (liftIO) 
-import Data.Monoid
-import Network.HTTP.Types.Status (status204)
-import Network.HTTP.Types ( StdMethod( OPTIONS ) )
 
 ------------------------------------------------------------------------------------
 -- | A CRUD is a OO-style database Table of typed rows, with getters and setters. 
@@ -67,13 +46,21 @@ instance FromJSON row => FromJSON (Named row) where
     parseJSON (Object v) = Named
                 <$> v .: "id"
                 <*> (parseJSON $ Object $ HashMap.delete "id" v)
-                
+    parseJSON _ = fail "row should be an object"
+
 instance ToJSON row => ToJSON (Named row) where                
-   toJSON (Named key row) = 
-                   case toJSON row of
-                     Object env -> Object $ HashMap.insert "id" (String key) env
-                     _ -> error "row should be an object"
+   toJSON = Object . namedRowToRow
 
 
+namedRowToRow :: (ToJSON row) => Named row -> Row
+namedRowToRow (Named key row) = case toJSON row of
+     Object env -> HashMap.insert "id" (String key) env
+     _ -> error "row should be an object"
+     
+
+rowToNamedRow :: (FromJSON row) => Row -> Named row
+rowToNamedRow row = case fromJSON (Object row) of
+     Error msg -> error $ msg
+     Success a -> a
 
                 

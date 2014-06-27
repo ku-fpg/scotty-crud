@@ -40,27 +40,14 @@ import Data.Attoparsec.ByteString as Atto
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.HashMap.Strict as HashMap
-import Data.HashMap.Strict (HashMap)
 import Control.Applicative
 import Data.Char (isSpace, isDigit, chr)
-import Data.List (foldl', sortBy)
-import Data.Text (Text, pack)
-import Control.Monad
+import Data.Text(Text)
 import qualified Data.Text as Text
 import Control.Concurrent.STM
 import Control.Concurrent
-import Control.Exception
+--import Control.Exception
 import System.IO
-import Data.Scientific
-
--- Scotty stuff
-import Data.Aeson hiding (json)
-import Web.Scotty as Scotty
-import qualified Data.HashMap.Strict as HashMap
-import Control.Monad.IO.Class (liftIO) 
-import Data.Monoid
-import Network.HTTP.Types.Status (status204)
-import Network.HTTP.Types ( StdMethod( OPTIONS ) )
 
 import Web.Scotty.CRUD
 
@@ -87,7 +74,6 @@ actorCRUD :: (TableUpdate row -> STM ())
 actorCRUD push env = do
 
     table <- newTVarIO env
-    updateChan <- newTChanIO
     
     let top :: STM Integer
         top = do t <- readTVar table
@@ -109,7 +95,7 @@ actorCRUD push env = do
                t <- readTVar table
                if HashMap.member iD t
                then do mx <- top
-                       t <- writeTVar uniq (mx + 1)
+                       writeTVar uniq (mx + 1)
                        next
                  -- Great, we can use this value
                else do writeTVar uniq $! (n + 1)
@@ -118,7 +104,7 @@ actorCRUD push env = do
     let updateCRUD update = do
           modifyTVar table (tableUpdate update)
           push update
-
+{-
     let handler m = m `catches`
          []
 {-
@@ -127,8 +113,7 @@ actorCRUD push env = do
                           -- print ("XX",ex) ; return () }
           ]
 -}
-    flushed <- newTVarIO True
-    done <- newEmptyTMVarIO
+-}
 
     return $ CRUD
      { createRow = \ row    -> do iD <- next
@@ -171,11 +156,11 @@ persistantCRUD fileName = do
 -- This will call 'fail' for any attempted writes.
 readOnlyCRUD :: (Monad m) => CRUD m row -> CRUD m row
 readOnlyCRUD crud = CRUD 
-     { createRow = \ iD  -> fail "read only / createRow"
+     { createRow = \ _iD  -> fail "read only / createRow"
      , getRow    = \ iD     -> getRow crud iD
      , getTable  = getTable crud
-     , updateRow = \ row -> fail "read only / updateRow"
-     , deleteRow = \ iD  -> fail "read only / deleteRow"
+     , updateRow = \ _row -> fail "read only / updateRow"
+     , deleteRow = \ _iD  -> fail "read only / deleteRow"
      }
 
 
@@ -239,7 +224,7 @@ writeableTableUpdate h = do
                      return ()
              _ -> loop
 
-    forkIO $ loop
+    _ <- forkIO $ loop
     
     return $ writeTChan updateChan
 
@@ -262,10 +247,11 @@ instance FromJSON row => FromJSON (TableUpdate row) where
         ( RowUpdate <$> parseJSON (Object v)) <|> 
         ( RowDelete <$> v .: "delete")        <|>
         ( Shutdown  <$> v .: "shutdown")
+    parseJSON _ = error "TableUpdate Object was not a valid Object"
 
 tableUpdate :: TableUpdate row -> Table row -> Table row
 tableUpdate (RowUpdate (Named key row)) = HashMap.insert key row
 tableUpdate (RowDelete key)             = HashMap.delete key
-tableUpdate (Shutdown msg)              = id
+tableUpdate (Shutdown _msg)             = id
 
 
