@@ -2,6 +2,7 @@
 module Main where
 
 import Web.Scotty.CRUD
+import Web.Scotty.CRUD.Persistant
 import System.IO
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Set as Set

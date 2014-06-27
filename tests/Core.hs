@@ -5,6 +5,7 @@ module Main where
 import qualified Data.Text as Text
 import Data.Text(Text,pack)
 import Web.Scotty.CRUD
+import Web.Scotty.CRUD.Persistant
 import System.IO
 import System.Directory
 import Control.Applicative
