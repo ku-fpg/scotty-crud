@@ -12,7 +12,6 @@ cabal-version:       >=1.10
 
 library
   exposed-modules:     Web.Scotty.CRUD, 
-                       Web.Scotty.CRUD.SQL,
                        Web.Scotty.CRUD.Persistant
   -- other-modules:       
   other-extensions:    OverloadedStrings, ScopedTypeVariables, TypeFamilies, TypeSynonymInstances, FlexibleInstances
