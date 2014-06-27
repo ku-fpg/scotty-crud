@@ -1,5 +1,7 @@
 {-# LANGUAGE OverloadedStrings, ScopedTypeVariables, TypeFamilies, TypeSynonymInstances, FlexibleInstances #-}
 module Web.Scotty.CRUD (
+       -- * CRUD service
+       scottyCRUD,
        -- * Basic types
        CRUD(..),
        Id, Table, Row, Named(..),
