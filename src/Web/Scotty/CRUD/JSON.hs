@@ -1,8 +1,8 @@
 {-# LANGUAGE OverloadedStrings, ScopedTypeVariables, TypeFamilies, TypeSynonymInstances, FlexibleInstances #-}
 
--- | Persistant is a sample implementation of a CRUD. The file format is a flat file of JSON records,
---  with changes appended to the end of the file only. There is always an "id" field, a later records
---  (as per the "id" value) overwrite earlier records.
+-- | This is a sample implementation of a CRUD. The file format is a flat file of JSON records,
+--  with changes appended to the end of the file only. There is always an "id" field in a record,
+--  and later records (as per the "id" value) overwrite earlier records.
 --
 -- >{"id":"ABCD","firstname":"Roger","lastname":"Rabbit","age",21} 
 --
@@ -81,8 +81,7 @@ atomicCRUD crud = CRUD
 --   starts with the given table, and sends update events
 --   to the provided higher-order update function.
 
-actorCRUD :: (ToJSON row, FromJSON row) 
-	 => (TableUpdate row -> STM ())	   
+actorCRUD :: (TableUpdate row -> STM ())	   
 	 -> Table row	-- initial Table row
 	 -> IO (CRUD STM row)
 actorCRUD push env = do
