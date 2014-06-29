@@ -17,42 +17,46 @@ import Data.Char (chr, isDigit)
 import System.Environment
 
 main :: IO ()
-main = getArgs >>= main2
-
-main2 :: [String] -> IO ()
-main2 ["compress"] = do
-        tab :: Table Row <- readTable stdin
-        writeTable stdout tab
-main2 ["compress",db] = do
-        h <- openBinaryFile db ReadMode
-        tab :: Table Row <- readTable h
-        hClose h
-        h <- openBinaryFile db WriteMode
-        writeTable h tab
-        hClose h
-main2 ["table"] = table_main 20
-main2 ['-':'-':ns,"table"] | all isDigit ns && not (null ns) = table_main (read ns)
-main2 [         "update",db] = update_main False db
-main2 ["--join","update",db] = update_main True db
-
-main2 _ = error $ unlines
+main = do
+        args <- getArgs
+        let (flags,opts) = span ("--" `isPrefixOf`) args
+        case opts of
+          ("compress":opts') | null flags -> compress_main opts'
+          ("table":opts')    | null opts' -> compress_main flags
+          ("update":opts')                -> update_main   flags opts'                            
+          _ -> error $ unlines
                 [ "usage: crud [options] [command] [files]"
                 , "         where command = compress | table | update"
                 , ""
                 , "  crud compress < input.json > compressed-output.json"
                 , "  crud compress db.json"
                 , ""
-                , "  crud [--'int'] table < input.json | less"
+                , "  crud [--'<width>'] table < input.json | less"
                 , ""
                 , "  crud [--join] update db.json < new.json"
                 ]
 
--- Get the raw ASCII text, please
-raw :: BS.ByteString -> String
-raw = map (chr.fromIntegral) . BS.unpack        
+------------------------------------------------------------------------------------------------------------
 
-table_main :: Int -> IO ()
-table_main mx = do
+compress_main :: [String] -> IO ()
+compress_main [] = do
+        tab :: Table Row <- readTable stdin
+        writeTable stdout tab
+compress_main [db] = do
+        h <- openBinaryFile db ReadMode
+        tab :: Table Row <- readTable h
+        hClose h
+        h <- openBinaryFile db WriteMode
+        writeTable h tab
+        hClose h
+compress_main _ = error "crud compress: unknown options"
+
+------------------------------------------------------------------------------------------------------------
+
+table_main :: [String] -> IO ()
+table_main ['-':'-':ns] | all isDigit ns && not (null ns) = do
+
+        let mx = read ns
 
         -- Read what you can, please, into a Table.
         tab :: Table Row <- readTable stdin
@@ -87,10 +91,16 @@ table_main mx = do
                   | (k,v) <- HashMap.toList tab
                   , let v' = HashMap.insert (pack "id") (unpack k) $ fmap (raw . encode) v
                   ]
+table_main _ = error "crud table: unknown options"
         
+------------------------------------------------------------------------------------------------------------
         
-update_main :: Bool -> String -> IO ()
-update_main isJoined db = do
+update_main :: [String] -> [String] -> IO ()
+update_main opts [db] = case opts of
+                         []         -> update False
+                         ["--join"] -> update True
+  where  
+    update isJoined = do
         let f new old | isJoined  = HashMap.union new old  -- join the two maps, use new over old if matched
                       | otherwise = new                   -- simple repalce
         new <- readTable stdin
@@ -102,5 +112,11 @@ update_main isJoined db = do
                   | (id,row :: Row) <- HashMap.toList new
                   ]
         return ()
+update_main _ _ = error "crud update: unknown options"
 
+------------------------------------------------------------------------------------------------------------
+
+-- Get the raw ASCII text, please
+raw :: BS.ByteString -> String
+raw = map (chr.fromIntegral) . BS.unpack        
         
