@@ -15,9 +15,24 @@ import qualified Data.ByteString.Lazy as BS
 import Data.Char (chr, isDigit)
 import System.Environment
 
--- Read from stdin, send table to 
-main = do
-        args <- getArgs
+main :: IO ()
+main = getArgs >>= main2
+
+main2 :: [String] -> IO ()
+main2 ["compress"] = do
+        tab :: Table Row <- readTable stdin
+        writeTable stdout tab
+main2 ["compress",db] = do
+        h <- openBinaryFile db ReadMode
+        tab :: Table Row <- readTable h
+        hClose h
+        h <- openBinaryFile db WriteMode
+        writeTable h tab
+        hClose h
+main2 ["table"] = main2 ["--20","table"]
+main2 ['-':'-':ns,"table"] | all isDigit ns && not (null ns) = do
+        let mx = read ns
+
         -- Read what you can, please, into a Table.
         tab :: Table Row <- readTable stdin
 
@@ -26,24 +41,16 @@ main = do
         
         let keys :: Set Text = Set.fromList $ pack "id" : concatMap HashMap.keys (HashMap.elems tab)
         
-        -- now, for each key, figure out width.
-        
-        let sz = fmap (\ row -> fmap (length . show) row) tab
-
-        let mx = case args of
-                   [ns] | all isDigit ns -> read ns
-                   _ -> 20
-        let best x y = max x y
-        
         let keyMx = id -- fmap (\ (k,v) -> (k,max (Text.length k) v))
                   $ sortBy (\ (k1,_) (k2,_) -> if k1 == k2 then EQ else
                                                if k1 == pack "id" then LT else
                                                if k2 == pack "id" then GT else
                                                compare k1 k2)
                   $ HashMap.toList
-                  $ HashMap.fromListWith best $
+                  $ HashMap.fromListWith max $
                         [ (k',min mx $ length $ raw $ encode v') | (k,v) <- HashMap.toList tab, (k',v') <- HashMap.toList v ] ++
-                        [ (pack "id",Text.length k) | (k,v) <- HashMap.toList tab]
+                        [ (pack "id",Text.length k) | (k,v) <- HashMap.toList tab] ++
+                        [ (k,Text.length k) | k <- Set.toList keys ]
 
 
         let rjust txt n = take (n - length txt) (repeat ' ') ++ take n txt
@@ -61,6 +68,18 @@ main = do
                   ]
 
 
+main2 _ = error $ unlines
+                [ "usage: crud [options] [command] [files]"
+                , "         where command = compress | table | update"
+                , ""
+                , "  crud compress < input.json > compressed-output.json"
+                , "  crud compress db.json"
+                , ""
+                , "  crud [--'int'] table < input.json | less"
+                , ""
+                , "  crud [--join] update db.json < new.json"
+                ]
+
 -- Get the raw ASCII text, please
 raw :: BS.ByteString -> String
-raw = map (chr.fromIntegral) . BS.unpack
+raw = map (chr.fromIntegral) . BS.unpack        
