@@ -29,15 +29,33 @@ main2 ["compress",db] = do
         h <- openBinaryFile db WriteMode
         writeTable h tab
         hClose h
-main2 ["table"] = main2 ["--20","table"]
-main2 ['-':'-':ns,"table"] | all isDigit ns && not (null ns) = do
-        let mx = read ns
+main2 ["table"] = table_main 20
+main2 ['-':'-':ns,"table"] | all isDigit ns && not (null ns) = table_main (read ns)
+
+main2 _ = error $ unlines
+                [ "usage: crud [options] [command] [files]"
+                , "         where command = compress | table | update"
+                , ""
+                , "  crud compress < input.json > compressed-output.json"
+                , "  crud compress db.json"
+                , ""
+                , "  crud [--'int'] table < input.json | less"
+                , ""
+                , "  crud [--join] update db.json < new.json"
+                ]
+
+-- Get the raw ASCII text, please
+raw :: BS.ByteString -> String
+raw = map (chr.fromIntegral) . BS.unpack        
+
+table_main :: Int -> IO ()
+table_main mx = do
 
         -- Read what you can, please, into a Table.
         tab :: Table Row <- readTable stdin
 
-        print (HashMap.elems tab)
-        print (map HashMap.keys (HashMap.elems tab))
+--        print (HashMap.elems tab)
+--        print (map HashMap.keys (HashMap.elems tab))
         
         let keys :: Set Text = Set.fromList $ pack "id" : concatMap HashMap.keys (HashMap.elems tab)
         
@@ -66,20 +84,5 @@ main2 ['-':'-':ns,"table"] | all isDigit ns && not (null ns) = do
                   | (k,v) <- HashMap.toList tab
                   , let v' = HashMap.insert (pack "id") (unpack k) $ fmap (raw . encode) v
                   ]
-
-
-main2 _ = error $ unlines
-                [ "usage: crud [options] [command] [files]"
-                , "         where command = compress | table | update"
-                , ""
-                , "  crud compress < input.json > compressed-output.json"
-                , "  crud compress db.json"
-                , ""
-                , "  crud [--'int'] table < input.json | less"
-                , ""
-                , "  crud [--join] update db.json < new.json"
-                ]
-
--- Get the raw ASCII text, please
-raw :: BS.ByteString -> String
-raw = map (chr.fromIntegral) . BS.unpack        
+        
+        
