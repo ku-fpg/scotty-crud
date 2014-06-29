@@ -3,6 +3,7 @@ module Main where
 
 import Web.Scotty.CRUD
 import Web.Scotty.CRUD.JSON
+import Web.Scotty.CRUD.Types
 import System.IO
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Set as Set
@@ -31,6 +32,8 @@ main2 ["compress",db] = do
         hClose h
 main2 ["table"] = table_main 20
 main2 ['-':'-':ns,"table"] | all isDigit ns && not (null ns) = table_main (read ns)
+main2 [         "update",db] = update_main False db
+main2 ["--join","update",db] = update_main True db
 
 main2 _ = error $ unlines
                 [ "usage: crud [options] [command] [files]"
@@ -85,4 +88,19 @@ table_main mx = do
                   , let v' = HashMap.insert (pack "id") (unpack k) $ fmap (raw . encode) v
                   ]
         
+        
+update_main :: Bool -> String -> IO ()
+update_main isJoined db = do
+        let f new old | isJoined = HashMap.union new old  -- join the two maps, use new over old if matched
+                      | otherwise = new                   -- simple repalce
+        new <- readTable stdin
+        crud <- persistantCRUD db
+        sequence_ [ ans1 <- getRow crud id
+                    case ans1 of
+                      Nothing   -> updateRow (Named id row)
+                      Just row' -> updateRow (Named id (f row row')
+                  | (id,row :: Row) <- HashMap.toList new
+                  ]
+        return ()
+
         
