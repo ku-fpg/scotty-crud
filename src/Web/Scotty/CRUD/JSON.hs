@@ -20,7 +20,6 @@
 --
 module Web.Scotty.CRUD.JSON (
        -- * CRUD functions
-       atomicCRUD,
        actorCRUD,
        persistantCRUD,
        readOnlyCRUD,
@@ -54,23 +53,13 @@ import Web.Scotty.CRUD
 ------------------------------------------------------------------------------------
 -- CRUD functions
 
--- | take a STM-based CRUD, and return a IO-based CRUD
-atomicCRUD :: CRUD STM row -> CRUD IO row
-atomicCRUD crud = CRUD 
-     { createRow = atomically . createRow crud
-     , getRow    = atomically . getRow crud
-     , getTable  = atomically $ getTable crud
-     , updateRow = atomically . updateRow crud 
-     , deleteRow = atomically . deleteRow crud
-     }
-
 -- | Build an actor behind a CRUD object. This object
 --   starts with the given table, and sends update events
 --   to the provided higher-order update function.
 
-actorCRUD :: (TableUpdate row -> STM ())	   
+actorCRUD :: (TableUpdate row -> IO ())	   
 	 -> Table row	-- initial Table row
-	 -> IO (CRUD STM row)
+	 -> IO (CRUD row)
 actorCRUD push env = do
 
     table <- newTVarIO env
@@ -102,7 +91,7 @@ actorCRUD push env = do
                        return iD
 
     let updateCRUD update = do
-          modifyTVar table (tableUpdate update)
+          atomically $ modifyTVar table (tableUpdate update)
           push update
 {-
     let handler m = m `catches`
@@ -116,13 +105,14 @@ actorCRUD push env = do
 -}
 
     return $ CRUD
-     { createRow = \ row    -> do iD <- next
+     { createRow = \ row    -> do iD <- atomically $ next
                                   let row' = Named iD row
                                   updateCRUD (RowUpdate row')
                                   return row'
-     , getRow    = \ iD     -> do t <- readTVar table
+     , getRow    = \ iD     -> atomically $ 
+                               do t <- readTVar table
                                   return $ fmap (Named iD) $ HashMap.lookup iD t
-     , getTable  = do readTVar table
+     , getTable  = atomically $ readTVar table
      , updateRow = updateCRUD . RowUpdate 
      , deleteRow = updateCRUD . RowDelete
      }
@@ -137,7 +127,7 @@ actorCRUD push env = do
 --
 -- Be careful: The file handle open here never gets closed.
 
-persistantCRUD :: (FromJSON row, ToJSON row) => FilePath -> IO (CRUD STM row)
+persistantCRUD :: (FromJSON row, ToJSON row) => FilePath -> IO (CRUD row)
 persistantCRUD fileName = do
         h <- openBinaryFile fileName ReadWriteMode
         -- Read what you can, please, into a Table.
@@ -154,7 +144,7 @@ persistantCRUD fileName = do
 
 -- | create a CRUD that does not honor write requests.
 -- This will call 'fail' for any attempted writes.
-readOnlyCRUD :: (Monad m) => CRUD m row -> CRUD m row
+readOnlyCRUD :: CRUD row -> CRUD row
 readOnlyCRUD crud = CRUD 
      { createRow = \ _iD  -> fail "read only / createRow"
      , getRow    = \ iD     -> getRow crud iD
@@ -207,12 +197,12 @@ writeTable h table = sequence_
 
 -- TODO: what happens if the TableUpdate contains _|_?
 -- Perhaps there should be a deepseq requrement on the argument?
-writeableTableUpdate :: (ToJSON row) => Handle -> IO (TableUpdate row -> STM ())
+writeableTableUpdate :: (ToJSON row) => Handle -> IO (TableUpdate row -> IO ())
 writeableTableUpdate h = do
     updateChan <- newTChanIO
 
     let loop = do
-          tu <- atomically $ do
+          (tu,done) <- atomically $ do
                   readTChan updateChan
 --          print $ "writing" ++ show tu
           LBS.hPutStr h (encode tu)
@@ -221,12 +211,17 @@ writeableTableUpdate h = do
           case tu of
              Shutdown {} -> do
                      hClose h
+                     atomically $ putTMVar done ()
                      return ()
-             _ -> loop
+             _ -> do atomically $ putTMVar done ()
+                     loop
 
     _ <- forkIO $ loop
     
-    return $ writeTChan updateChan
+    return $ \ up -> do
+        done <- newTMVarIO ()
+        atomically $ writeTChan updateChan (up,done)
+        atomically $ takeTMVar done
 
 -- Changes all all either an update (create a new field if needed) or a delete.
 

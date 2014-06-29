@@ -91,14 +91,14 @@ table_main mx = do
         
 update_main :: Bool -> String -> IO ()
 update_main isJoined db = do
-        let f new old | isJoined = HashMap.union new old  -- join the two maps, use new over old if matched
+        let f new old | isJoined  = HashMap.union new old  -- join the two maps, use new over old if matched
                       | otherwise = new                   -- simple repalce
         new <- readTable stdin
         crud <- persistantCRUD db
-        sequence_ [ ans1 <- getRow crud id
-                    case ans1 of
-                      Nothing   -> updateRow (Named id row)
-                      Just row' -> updateRow (Named id (f row row')
+        sequence_ [ do ans1 <- getRow crud id
+                       case ans1 of
+                         Nothing   -> updateRow crud (Named id row)
+                         Just (Named _ row') -> updateRow crud (Named id (f row row'))
                   | (id,row :: Row) <- HashMap.toList new
                   ]
         return ()

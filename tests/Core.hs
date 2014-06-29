@@ -15,7 +15,6 @@ import qualified Data.HashMap.Strict as HashMap
 import Test.QuickCheck
 import Test.QuickCheck.Monadic (assert, monadicIO, pick, pre, run)
 import Test.QuickCheck.Function
-import Control.Concurrent.STM
 --TMP
 import Control.Concurrent (threadDelay)
 
@@ -78,7 +77,7 @@ instance Show row => Show (CRUDAction row a) where
         show (Return _) = "Return"
 
 data Env row = Env 
-        { theCRUD  :: CRUD IO row
+        { theCRUD  :: CRUD row
         , ids      :: [Text]
         , oracle   :: [(Text,Named row)]
         , debug    :: IO () -> IO ()
@@ -163,7 +162,7 @@ runCRUDAction PersistantCRUD prog = do
         let debugging _ = return ()
         let restart env = return env
         let shutdown = return ()
-        interp prog $ Env (atomicCRUD crud) [] [] debugging restart shutdown
+        interp prog $ Env crud [] [] debugging restart shutdown
         -- We should check that the env in the file is the same as the model
         
 runCRUDAction RestartingCRUD prog = do
@@ -184,7 +183,7 @@ runCRUDAction RestartingCRUD prog = do
 
         let debugging m = return ()
         let restart' h push env = do
-                atomically $ push (Shutdown "restart")
+                push (Shutdown "restart")
 
                 let loop = do
                         b <- hIsClosed h
@@ -198,11 +197,11 @@ runCRUDAction RestartingCRUD prog = do
                 tab <- readTable h 
                 push <- writeableTableUpdate h
                 crud <- actorCRUD push tab
-                let env' = env { theCRUD = atomicCRUD crud, restart = restart' h push, shutdown = shutdown' push }
+                let env' = env { theCRUD = crud, restart = restart' h push, shutdown = shutdown' push }
                 return env'
 
-            shutdown' push = atomically $ push (Shutdown "bye")
-        interp prog $ Env (atomicCRUD crud) [] [] debugging (restart' h push) (shutdown' push)
+            shutdown' push = push (Shutdown "bye")
+        interp prog $ Env crud [] [] debugging (restart' h push) (shutdown' push)
 
 
 

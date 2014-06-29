@@ -7,15 +7,19 @@ import Data.HashMap.Strict as HashMap
 import Control.Monad.IO.Class (liftIO) 
 
 import Web.Scotty.CRUD
-import Web.Scotty.CRUD.JSON (actorCRUD, atomicCRUD)
+import Web.Scotty.CRUD.JSON (actorCRUD)
 
 import Data.Monoid (mconcat)
 
 main = scotty 3000 $ do
 
-  users  <- liftIO $ actorCRUD (\ _ -> return ())
-                      (HashMap.fromList [("foo",HashMap.fromList [("firstname", "Roger"),("lastname","Rabbit"),("age", Number 21)])] :: Table Row)
+  let tab :: Table Row
+      tab = HashMap.fromList [("foo",HashMap.fromList [("firstname", "Roger"),("lastname","Rabbit"),("age", Number 21)])]
 
-  scottyCRUD "/users" (atomicCRUD users)
+  users  <- liftIO $ actorCRUD 
+  	    	      (\ _ -> return ())	-- do not store the updates anywhere
+	      tab     	     		-- but supply an (updatable) table
+
+  scottyCRUD "/users" users
 
 

@@ -24,7 +24,7 @@ import Web.Scotty.CRUD.Types
 -- > crud <- liftIO $ persistantCRUD "filename"
 -- > scottyCRUD "URL" (atomicCRUD crud)
 
-scottyCRUD :: (Show row, FromJSON row, ToJSON row) => String -> CRUD IO row -> ScottyM ()
+scottyCRUD :: (Show row, FromJSON row, ToJSON row) => String -> CRUD row -> ScottyM ()
 scottyCRUD url crud = do
         let xRequest = do
                addHeader "Access-Control-Allow-Headers" "X-Requested-With, Content-Type, Accep"

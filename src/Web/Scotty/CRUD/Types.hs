@@ -14,12 +14,12 @@ import qualified Data.HashMap.Strict as HashMap
 ------------------------------------------------------------------------------------
 -- | A CRUD is a OO-style database Table of typed rows, with getters and setters. 
 --   The default row is a JSON Object.
-data CRUD m row = CRUD
-     { createRow :: row       -> m (Named row)
-     , getRow    :: Id        -> m (Maybe (Named row))
-     , getTable  ::              m (Table row)
-     , updateRow :: Named row -> m ()
-     , deleteRow :: Id        -> m () -- alway works
+data CRUD row = CRUD
+     { createRow :: row       -> IO (Named row)
+     , getRow    :: Id        -> IO (Maybe (Named row))
+     , getTable  ::              IO (Table row)
+     , updateRow :: Named row -> IO ()
+     , deleteRow :: Id        -> IO () -- alway works
      }
 ------------------------------------------------------------------------------------
 -- Basic synonyms for key structures 
