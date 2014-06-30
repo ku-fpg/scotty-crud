@@ -22,7 +22,7 @@ import Web.Scotty.CRUD.Types
 -- | scottyCRUD provides scotty support for a CRUD object.
 -- 
 -- > crud <- liftIO $ persistantCRUD "filename"
--- > scottyCRUD "URL" (atomicCRUD crud)
+-- > scottyCRUD "URL" crud
 
 scottyCRUD :: (Show row, FromJSON row, ToJSON row) => String -> CRUD row -> ScottyM ()
 scottyCRUD url crud = do
@@ -49,7 +49,6 @@ scottyCRUD url crud = do
                 case opt_row of
                   Nothing -> next
                   Just namedRow -> Scotty.json $ namedRow
-                liftIO $ print $ opt_row
 
         put (capture (url <> "/:id")) $ do 
                 xRequest
@@ -64,7 +63,6 @@ scottyCRUD url crud = do
                 status $ status204
                 raw ""
 
-
         addroute OPTIONS (capture url) $ do
                 xRequest
                 text "OK"
@@ -72,8 +70,5 @@ scottyCRUD url crud = do
         addroute OPTIONS (capture (url <> "/:id")) $ do
                 xRequest
                 text "OK"
-
-
---        get (capture $ url ++ "/:id") $ do return ()
 
                 
