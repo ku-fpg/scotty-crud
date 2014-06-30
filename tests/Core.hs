@@ -23,7 +23,8 @@ import Data.Aeson
 import QC
 
 main = do
---        quickCheck (prop_crud PersistantCRUD)   -- Done not close handle, so will leak handles when tested.
+        createDirectoryIfMissing True "test-tmp"
+        quickCheck (prop_crud PersistantCRUD)   -- Done not close handle, so will leak handles when tested.
         quickCheck (prop_crud RestartingCRUD)
 
 slowCheck :: Testable prop => prop -> IO ()
@@ -144,7 +145,7 @@ interp (Return _) env = do
         return True
 interp other      env = interpBind other Return env
 
-test_json = "tmp/test.json" :: String
+test_json = "test-tmp/test.json" :: String
 
 data CRUD_TEST_TYPE 
         = PersistantCRUD        -- loading once, using the persistantCRUD function
