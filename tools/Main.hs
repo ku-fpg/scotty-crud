@@ -15,6 +15,8 @@ import Data.Aeson
 import qualified Data.ByteString.Lazy as BS
 import Data.Char (chr, isDigit)
 import System.Environment
+import Web.Scotty as Scotty hiding (raw)
+import Control.Monad.IO.Class (liftIO) 
 
 main :: IO ()
 main = do
@@ -24,6 +26,7 @@ main = do
           ("compress":opts') | null flags -> compress_main opts'
           ("table":opts')    | null opts' -> compress_main flags
           ("update":opts')                -> update_main   flags opts'                            
+          ("server":opts')                -> server_main   flags opts'                            
           _ -> error $ unlines
                 [ "usage: crud [options] [command] [files]"
                 , "         where command = compress | table | update"
@@ -34,6 +37,8 @@ main = do
                 , "  crud [--'<width>'] table < input.json | less"
                 , ""
                 , "  crud [--join] update db.json < new.json"
+                , ""
+                ,"   crud [--read-only|--local] server 3000 db.json [db2.json ...]"
                 ]
 
 ------------------------------------------------------------------------------------------------------------
@@ -113,6 +118,18 @@ update_main opts [db] = case opts of
                   ]
         return ()
 update_main _ _ = error "crud update: unknown options"
+
+------------------------------------------------------------------------------------------------------------
+
+server_main :: [String] -> [String] -> IO ()
+server_main flags (port:dbs) | all isDigit port && not (null port) = scotty (read port) $ do
+  sequence_ [ do crud <- liftIO $ persistantCRUD db
+                 scottyCRUD ('/':db) (crud :: CRUD Row)
+            | db <- dbs 
+            ]
+
+server_main _ _ = error "crud server: unknown options"
+
 
 ------------------------------------------------------------------------------------------------------------
 
