@@ -28,6 +28,7 @@ main = do
           ("compress":opts') | null flags -> compress_main opts'
           ("table":opts')    | null opts' -> table_main flags
           ("update":opts')                -> update_main   opts'                            
+          ("delta":opts')                 -> delta_main     opts'
           ("server":opts')                -> server_main   flags opts'                            
           _ -> error $ unlines
                 [ "usage: crud [options] [command] [files]"
@@ -42,12 +43,10 @@ main = do
                 , "        --<width> : max width of each column (default 20)"
                 , ""
                 , "  -- update a db"
-                , "  crud [--sub] update db.json < new.json"
-                , "        --sub : sub-record merging"
+                , "  crud update db.json < new.json"
                 , ""
-                , "  -- find the differences between a db and a new-db"
-                , "  crud [--sub] diff db.json new-db.json"
-                , "        --sub : generate a sub-record diff"
+                , "  -- find the delta differences between a db and a new-db"
+                , "  crud delta db.json new-db.json"
                 , ""
                 , "  -- serve up a set of db's (names and URL paths are synonymous)"
                 ,"   crud [--read-only|--local] server 3000 db.json [db2.json ...]"
@@ -112,23 +111,45 @@ table_main _ = error "crud table: unknown options"
         
 ------------------------------------------------------------------------------------------------------------
         
-update_main :: [String] -> [String] -> IO ()
-update_main []        [db] = update False db
-update_main ["--sub"] [db] = update True db
-update_main _         _    = error "crud update: unknown options"
+update_main :: [String] -> IO ()
+update_main [db] = update db
+update_main _    = error "crud update: unknown options"
 
-update :: Bool -> String -> IO ()
-update isJoined db = do
-    let f new old | isJoined  = HashMap.union new old  -- join the two maps, use new over old if matched
-                  | otherwise = new                    -- simple repalce
-    new  <- readTable stdin
-    crud <- persistentCRUD db
+update ::  String -> IO ()
+update db = do
+    db_h <- openFile db AppendMode
+    ups :: [TableUpdate Row] <- readTableUpdates stdin
+    sequence_ [ writeTableUpdate db_h up
+              | up <- ups
+              ]
+    hClose db_h
+    return ()
+
+------------------------------------------------------------------------------------------------------------
+        
+delta_main :: [String] -> IO ()
+delta_main [db,db_new] = delta db db_new
+delta_main _           = error "crud delta: unknown options"
+
+-- What update would be required to turn the old db into the new db?
+-- Can include deletes.
+delta :: String -> String -> IO ()
+delta db db_new = do
+    old  :: Table Row <- openFile db     ReadMode >>= readTable
+    new  :: Table Row <- openFile db_new ReadMode >>= readTable
+    let iDs = HashMap.keys old ++ [ k | k <- HashMap.keys new, not (k `HashMap.member` old) ]
+    sequence_ [ case (HashMap.lookup iD old,HashMap.lookup iD new) of
+                  (_,     Just n)   -> writeTableUpdate stdout (RowUpdate (Named iD n :: Named Row))
+                  (Just _,Nothing)  -> writeTableUpdate stdout (RowDelete iD :: TableUpdate Row)
+                  (Nothing,Nothing) -> error "internal error"
+              | iD <- iDs
+              ]
+ {-
     sequence_ [ do ans1 <- getRow crud iD
-                   case ans1 of
-                        Nothing   -> updateRow crud (Named iD row)
+                   case HashMap.lookup ans1 of
+                        Nothing             -> updateRow crud (Named iD row)
                         Just (Named _ row') -> updateRow crud (Named iD (f row row'))
-                | (iD,row :: Row) <- HashMap.toList new
-                ]
+-}
     return ()
 
 ------------------------------------------------------------------------------------------------------------
