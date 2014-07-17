@@ -26,8 +26,8 @@ main = do
         let (flags,opts) = span ("--" `isPrefixOf`) args
         case opts of
           ("compress":opts') | null flags -> compress_main opts'
-          ("table":opts')    | null opts' -> compress_main flags
-          ("update":opts')                -> update_main   flags opts'                            
+          ("table":opts')    | null opts' -> table_main flags
+          ("update":opts')                -> update_main   opts'                            
           ("server":opts')                -> server_main   flags opts'                            
           _ -> error $ unlines
                 [ "usage: crud [options] [command] [files]"

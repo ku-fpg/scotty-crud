@@ -1,0 +1,10 @@
+{"id":"1","foo":"Hello"}
+{"id":"2","foo":"Hello"}
+{"id":"3","foo":"Hello"}
+{"id":"5","foo":"Hello", "bar":"World"}
+
+{"foo":"Hello","id":"1"}
+{"foo":"Hello New","id":"2"}
+{"foo":"Hello","id":"5","bar":"New World"}
+{"delete":"3"}
+{"foo":"Hello","id":"4"}
