@@ -19,7 +19,6 @@ import           System.IO
 import           Web.Scotty as Scotty hiding (raw)
 import           Web.Scotty.CRUD
 import           Web.Scotty.CRUD.JSON
-import           Web.Scotty.CRUD.Types
 
 main :: IO ()
 main = do
@@ -54,9 +53,9 @@ compress_main [db] = do
         h <- openBinaryFile db ReadMode
         tab :: Table Row <- readTable h
         hClose h
-        h <- openBinaryFile db WriteMode
-        writeTable h tab
-        hClose h
+        h' <- openBinaryFile db WriteMode
+        writeTable h' tab
+        hClose h'
 compress_main _ = error "crud compress: unknown options"
 
 ------------------------------------------------------------------------------------------------------------
@@ -81,8 +80,8 @@ table_main ['-':'-':ns] | all isDigit ns && not (null ns) = do
                                                compare k1 k2)
                   $ HashMap.toList
                   $ HashMap.fromListWith max $
-                        [ (k',min mx $ length $ raw $ encode v') | (k,v) <- HashMap.toList tab, (k',v') <- HashMap.toList v ] ++
-                        [ (pack "id",Text.length k) | (k,v) <- HashMap.toList tab] ++
+                        [ (k',min mx $ length $ raw $ encode v') | (_k,v) <- HashMap.toList tab, (k',v') <- HashMap.toList v ] ++
+                        [ (pack "id",Text.length k) | (k,_v) <- HashMap.toList tab] ++
                         [ (k,Text.length k) | k <- Set.toList keys ]
 
 
@@ -104,28 +103,28 @@ table_main _ = error "crud table: unknown options"
 ------------------------------------------------------------------------------------------------------------
         
 update_main :: [String] -> [String] -> IO ()
-update_main opts [db] = case opts of
-                         []         -> update False
-                         ["--join"] -> update True
-  where  
-    update isJoined = do
-        let f new old | isJoined  = HashMap.union new old  -- join the two maps, use new over old if matched
-                      | otherwise = new                   -- simple repalce
-        new <- readTable stdin
-        crud <- persistantCRUD db
-        sequence_ [ do ans1 <- getRow crud id
-                       case ans1 of
-                         Nothing   -> updateRow crud (Named id row)
-                         Just (Named _ row') -> updateRow crud (Named id (f row row'))
-                  | (id,row :: Row) <- HashMap.toList new
-                  ]
-        return ()
-update_main _ _ = error "crud update: unknown options"
+update_main []         [db] = update False db
+update_main ["--join"] [db] = update True db
+update_main _          _    = error "crud update: unknown options"
+
+update :: Bool -> String -> IO ()
+update isJoined db = do
+    let f new old | isJoined  = HashMap.union new old  -- join the two maps, use new over old if matched
+                  | otherwise = new                   -- simple repalce
+    new  <- readTable stdin
+    crud <- persistantCRUD db
+    sequence_ [ do ans1 <- getRow crud iD
+                   case ans1 of
+                        Nothing   -> updateRow crud (Named iD row)
+                        Just (Named _ row') -> updateRow crud (Named iD (f row row'))
+                | (iD,row :: Row) <- HashMap.toList new
+                ]
+    return ()
 
 ------------------------------------------------------------------------------------------------------------
 
 server_main :: [String] -> [String] -> IO ()
-server_main flags (port:dbs) | all isDigit port && not (null port) = scotty (read port) $ do
+server_main _ (port:dbs) | all isDigit port && not (null port) = scotty (read port) $ do
   sequence_ [ do crud <- liftIO $ persistantCRUD db
                  scottyCRUD ('/':db) (crud :: CRUD Row)
             | db <- dbs 

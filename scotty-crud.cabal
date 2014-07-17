@@ -74,4 +74,4 @@ Test-Suite test-crud
                        unordered-containers >= 0.2  && < 0.3,
                        vector               >= 0.10 && < 0.11
     default-language:  Haskell2010
-    ghc-options:       -Wall
+    ghc-options:       -Wall -fno-warn-orphans
