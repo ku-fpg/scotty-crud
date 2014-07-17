@@ -2,20 +2,20 @@
 
 module QC where
 
-import Data.Aeson as A    
-import qualified Data.Vector as V  
-import Control.Applicative
-import Data.HashMap.Strict (HashMap)
+import           Control.Applicative
+import           Control.Monad
+
+import           Data.Aeson as A    
+import           Data.Hashable (Hashable)
+import           Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Text as Text
-import Data.Text (Text)
-import Data.Hashable (Hashable)
-import Control.Monad
-import Data.Text (Text)
-import Data.Scientific
+import           Data.Text (Text)
+import           Data.Scientific
+import qualified Data.Vector as V
 
-import Test.QuickCheck
-import Test.QuickCheck.Function
+import           Test.QuickCheck
+import           Test.QuickCheck.Function
 
 instance Arbitrary Text where
   arbitrary = do i <- choose (1,10)

@@ -1,22 +1,25 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Main where
 
-import Web.Scotty.CRUD
-import Web.Scotty.CRUD.JSON
-import Web.Scotty.CRUD.Types
-import System.IO
-import qualified Data.HashMap.Strict as HashMap
-import qualified Data.Set as Set
-import Data.Set (Set)
-import Data.Text (Text, pack, unpack)
-import qualified Data.Text as Text
-import Data.List
-import Data.Aeson
+import           Control.Monad.IO.Class (liftIO) 
+
+import           Data.Aeson
 import qualified Data.ByteString.Lazy as BS
-import Data.Char (chr, isDigit)
-import System.Environment
-import Web.Scotty as Scotty hiding (raw)
-import Control.Monad.IO.Class (liftIO) 
+import           Data.Char (chr, isDigit)
+import qualified Data.HashMap.Strict as HashMap
+import           Data.List
+import qualified Data.Set as Set
+import           Data.Set (Set)
+import qualified Data.Text as Text
+import           Data.Text (Text, pack, unpack)
+
+import           System.Environment
+import           System.IO
+
+import           Web.Scotty as Scotty hiding (raw)
+import           Web.Scotty.CRUD
+import           Web.Scotty.CRUD.JSON
+import           Web.Scotty.CRUD.Types
 
 main :: IO ()
 main = do

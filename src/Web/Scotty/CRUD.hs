@@ -8,16 +8,17 @@ module Web.Scotty.CRUD (
        ) where
 
 
-import Data.Aeson
+import           Data.Aeson
 import qualified Data.HashMap.Strict as HashMap
-import Control.Monad.IO.Class (liftIO) 
-import Data.Monoid
-import Network.HTTP.Types.Status (status204)
-import Network.HTTP.Types ( StdMethod( OPTIONS ) )
+import           Data.Monoid
 
-import Web.Scotty as Scotty
+import           Control.Monad.IO.Class (liftIO) 
 
-import Web.Scotty.CRUD.Types
+import           Network.HTTP.Types.Status (status204)
+import           Network.HTTP.Types ( StdMethod( OPTIONS ) )
+
+import           Web.Scotty as Scotty
+import           Web.Scotty.CRUD.Types
 
 -- | scottyCRUD provides scotty support for a CRUD object.
 -- 

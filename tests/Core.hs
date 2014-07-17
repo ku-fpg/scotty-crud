@@ -2,25 +2,28 @@
 
 module Main where
 
-import qualified Data.Text as Text
-import Data.Text(Text,pack)
-import Web.Scotty.CRUD
-import Web.Scotty.CRUD.JSON
-import System.IO
-import System.Directory
-import Control.Applicative
-import Control.Monad
-import Control.Lens ((^.))
-import qualified Data.HashMap.Strict as HashMap
-import Test.QuickCheck
-import Test.QuickCheck.Monadic (assert, monadicIO, pick, pre, run)
-import Test.QuickCheck.Function
+import           Control.Applicative
 --TMP
-import Control.Concurrent (threadDelay)
+import           Control.Concurrent (threadDelay)
+import           Control.Lens ((^.))
+import           Control.Monad
 
-import Data.Aeson
+import           Data.Aeson
+import qualified Data.HashMap.Strict as HashMap
+import qualified Data.Text as Text
+import           Data.Text (Text, pack)
 
-import QC
+import           QC
+
+import           System.Directory
+import           System.IO
+
+import           Test.QuickCheck
+import           Test.QuickCheck.Function
+import           Test.QuickCheck.Monadic (assert, monadicIO, pick, pre, run)
+
+import           Web.Scotty.CRUD
+import           Web.Scotty.CRUD.JSON
 
 main = do
         createDirectoryIfMissing True "test-tmp"
