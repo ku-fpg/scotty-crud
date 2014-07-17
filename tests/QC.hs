@@ -2,20 +2,17 @@
 
 module QC where
 
-import Data.Aeson as A    
-import qualified Data.Vector as V  
-import Control.Applicative
-import Data.HashMap.Strict (HashMap)
+import           Control.Applicative
+import           Control.Monad
+
+import           Data.Aeson as A
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Text as Text
-import Data.Text (Text)
-import Data.Hashable (Hashable)
-import Control.Monad
-import Data.Text (Text)
-import Data.Scientific
+import           Data.Text (Text)
+import           Data.Scientific
+import qualified Data.Vector as V
 
-import Test.QuickCheck
-import Test.QuickCheck.Function
+import           Test.QuickCheck
 
 instance Arbitrary Text where
   arbitrary = do i <- choose (1,10)
@@ -53,6 +50,7 @@ instance Arbitrary A.Array where
           i <- choose (1,10)
           arbitraryArray i
 
+arbitraryArray :: Int -> Gen (V.Vector Value)
 arbitraryArray n = do 
         i <- choose (0,10)
         V.fromList <$> vectorOf i (arbitraryValue (n-1) :: Gen A.Value)

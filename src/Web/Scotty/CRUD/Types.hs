@@ -5,10 +5,11 @@ module Web.Scotty.CRUD.Types (
        namedRowToRow, rowToNamedRow
        ) where
 
-import Data.Aeson
-import Data.HashMap.Strict (HashMap)
-import Control.Applicative
-import Data.Text(Text)
+import           Control.Applicative
+
+import           Data.Aeson
+import           Data.HashMap.Strict (HashMap)
+import           Data.Text(Text)
 import qualified Data.HashMap.Strict as HashMap
 
 ------------------------------------------------------------------------------------
