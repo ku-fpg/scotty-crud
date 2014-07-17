@@ -1,14 +1,14 @@
 {-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
 
-import Web.Scotty
-import Data.Aeson
-import Data.HashMap.Strict as HashMap
 import Control.Monad.IO.Class (liftIO) 
 
-import Web.Scotty.CRUD
+import Data.Aeson
 import Data.CRUD
-
+import Data.HashMap.Strict as HashMap
 import Data.Monoid (mconcat)
+
+import Web.Scotty
+import Web.Scotty.CRUD
 
 main = scotty 3000 $ do
 

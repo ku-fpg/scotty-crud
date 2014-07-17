@@ -6,19 +6,19 @@ module Web.Scotty.CRUD.SQL (
          select 
          ) where
 
-import Data.Aeson
-import Data.Text (Text, pack)
-import Control.Monad
+import           Control.Monad
+import           Control.Monad.IO.Class (liftIO) 
 
+import           Data.Aeson
 import qualified Data.HashMap.Strict as HashMap
-import Control.Monad.IO.Class (liftIO) 
-import Data.Monoid
-import Network.HTTP.Types.Status (status204)
-import Network.HTTP.Types ( StdMethod( OPTIONS ) )
+import           Data.Monoid
+import           Data.Text (Text, pack)
 
-import Web.Scotty as Scotty
+import           Network.HTTP.Types.Status (status204)
+import           Network.HTTP.Types ( StdMethod( OPTIONS ) )
 
-import Web.Scotty.CRUD.Types
+import           Web.Scotty as Scotty
+import           Web.Scotty.CRUD.Types
  
 ------------------------------------------------------------------------------------
 -- SQL-style SELECT

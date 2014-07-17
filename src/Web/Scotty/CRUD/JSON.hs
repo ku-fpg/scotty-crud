@@ -21,7 +21,7 @@
 module Web.Scotty.CRUD.JSON (
        -- * CRUD functions
        actorCRUD,
-       persistantCRUD,
+       persistentCRUD,
        readOnlyCRUD,
        -- * Table functions
        readTable,
@@ -33,22 +33,24 @@ module Web.Scotty.CRUD.JSON (
        writeableTableUpdate
        ) where
 
-import Data.Aeson
-import Data.Aeson.Parser as P
-import Data.Attoparsec.ByteString as Atto
+import           Control.Applicative
+import           Control.Concurrent
+import           Control.Concurrent.STM
+--import           Control.Exception
+
+import           Data.Aeson
+import           Data.Aeson.Parser as P
+import           Data.Attoparsec.ByteString as Atto
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
+import           Data.Char (isSpace, isDigit, chr)
 import qualified Data.HashMap.Strict as HashMap
-import Control.Applicative
-import Data.Char (isSpace, isDigit, chr)
-import Data.Text(Text)
+import           Data.Text (Text)
 import qualified Data.Text as Text
-import Control.Concurrent.STM
-import Control.Concurrent
---import Control.Exception
-import System.IO
 
-import Web.Scotty.CRUD
+import           System.IO
+
+import           Web.Scotty.CRUD
 
 ------------------------------------------------------------------------------------
 -- CRUD functions
@@ -127,8 +129,8 @@ actorCRUD push env = do
 --
 -- Be careful: The file handle open here never gets closed.
 
-persistantCRUD :: (FromJSON row, ToJSON row) => FilePath -> IO (CRUD row)
-persistantCRUD fileName = do
+persistentCRUD :: (FromJSON row, ToJSON row) => FilePath -> IO (CRUD row)
+persistentCRUD fileName = do
         h <- openBinaryFile fileName ReadWriteMode
         -- Read what you can, please, into a Table.
         tab <- readTable h 

@@ -2,26 +2,28 @@
 
 module Main where
 
-import qualified Data.Text as Text
-import Data.Text(Text,pack)
-import Web.Scotty.CRUD
-import Web.Scotty.CRUD.JSON
-import System.IO
-import System.Directory
-import Control.Applicative
-import Control.Monad
-import Control.Lens ((^.))
-import qualified Data.HashMap.Strict as HashMap
-import Test.QuickCheck
-import Test.QuickCheck.Monadic (assert, monadicIO, pick, pre, run)
-import Test.QuickCheck.Function
+import           Control.Applicative
 --TMP
-import Control.Concurrent (threadDelay)
+import           Control.Concurrent (threadDelay)
+import           Control.Monad
 
-import Data.Aeson
+import           Data.Aeson
+import qualified Data.HashMap.Strict as HashMap
+import qualified Data.Text as Text
+import           Data.Text (Text, pack)
 
-import QC
+import           QC
 
+import           System.Directory
+import           System.IO
+
+import           Test.QuickCheck
+import           Test.QuickCheck.Monadic (assert, monadicIO, pick, run)
+
+import           Web.Scotty.CRUD
+import           Web.Scotty.CRUD.JSON
+
+main :: IO ()
 main = do
         createDirectoryIfMissing True "test-tmp"
         quickCheck (prop_crud PersistantCRUD)   -- Done not close handle, so will leak handles when tested.
@@ -62,9 +64,9 @@ instance Functor (CRUDAction row) where
         fmap f act = pure f <*> act
 
 instance Show row => Show (CRUDAction row a) where
-        show (CreateRow row) = "CreateRow {..}" -- ++ show row
-        show (UpdateRow row) = "UpdateRow {..}" -- ++ show row
-        show (DeleteRow id)  = "DeleteRow " ++ show id
+        show (CreateRow _) = "CreateRow {..}" -- ++ show row
+        show (UpdateRow _) = "UpdateRow {..}" -- ++ show row
+        show (DeleteRow iD)  = "DeleteRow " ++ show iD
         show (GetRow iD)     = "GetRow " ++ show iD
         show (GetId n)       = "GetId " ++ show n
         show (Restart)       = "Restart "
@@ -96,21 +98,21 @@ interpBind (GetRow iD) k env = do
 interpBind (CreateRow row) k env = do
         debug env $  putStrLn $ "CreateRow {}" -- ++ show row
         Named iD' row' <- createRow (theCRUD env) row
-        let env' = env { oracle = (iD',Named iD' row') : [ (k,v) | (k,v) <- oracle env, k /= iD' ] 
+        let env' = env { oracle = (iD',Named iD' row') : [ (k',v) | (k',v) <- oracle env, k' /= iD' ] 
                        , ids = ids env ++ [iD']
                        }
         interp (k ()) env'
 interpBind (UpdateRow (Named iD row)) k env = do
         debug env $ putStrLn $ "UpdateRow {}" -- ++ show (Named iD row)
         updateRow (theCRUD env) (Named iD row)
-        let env' = env { oracle = (iD,Named iD row) : [ (k,v) | (k,v) <- oracle env, k /= iD ] 
+        let env' = env { oracle = (iD,Named iD row) : [ (k',v) | (k',v) <- oracle env, k' /= iD ] 
                        , ids = ids env ++ if iD `elem` (ids env) then [] else [iD]
                        }
         interp (k ()) env'
 interpBind (DeleteRow iD) k env = do
         debug env $ putStrLn $ "DeleteRow {}" -- ++ show (Named iD row)
         deleteRow (theCRUD env) iD
-        let env' = env { oracle = [ (k,v) | (k,v) <- oracle env, k /= iD ] 
+        let env' = env { oracle = [ (k',v) | (k',v) <- oracle env, k' /= iD ] 
                        }
         interp (k ()) env'
 interpBind (GetId r) k env = interp (k (xs !! n)) env
@@ -118,8 +120,8 @@ interpBind (GetId r) k env = interp (k (xs !! n)) env
          n  = floor (r * fromIntegral (length xs))
          xs = iD : ids env   
          iD = head [ t :: Text
-                   | n <- [1..] :: [Int]
-                   , let t = Text.pack (show n)
+                   | n' <- [1..] :: [Int]
+                   , let t = Text.pack (show n')
                    , not (t `elem` (ids env))
                    ]
 interpBind (Restart) k env = do
@@ -135,7 +137,7 @@ interpBind (Assert b msg) k env = do
         
 interpBind (Return a) k env = interp (k a) env
 interpBind (Bind m k2) k env = interpBind m (\ r -> Bind (k2 r) k) env
-interpBind other k env = error $ "interpBind: " ++ show other
+interpBind other _ _ = error $ "interpBind: " ++ show other
 
 interp :: (ToJSON row, FromJSON row, Show row, Eq row) => CRUDAction row a ->  Env row -> IO Bool
 interp (Bind m k) env = interpBind m k env
@@ -145,10 +147,11 @@ interp (Return _) env = do
         return True
 interp other      env = interpBind other Return env
 
+test_json :: String
 test_json = "test-tmp/test.json" :: String
 
 data CRUD_TEST_TYPE 
-        = PersistantCRUD        -- loading once, using the persistantCRUD function
+        = PersistantCRUD        -- loading once, using the persistentCRUD function
         | RestartingCRUD        -- loading many times.
 
 runCRUDAction :: CRUD_TEST_TYPE -> CRUDAction Object () -> IO Bool
@@ -159,11 +162,11 @@ runCRUDAction PersistantCRUD prog = do
         then removeFile test_json
         else return ()
 
-        crud <- persistantCRUD test_json
+        crud <- persistentCRUD test_json
         let debugging _ = return ()
-        let restart env = return env
-        let shutdown = return ()
-        interp prog $ Env crud [] [] debugging restart shutdown
+        let restart' env = return env
+        let shutdown' = return ()
+        interp prog $ Env crud [] [] debugging restart' shutdown'
         -- We should check that the env in the file is the same as the model
         
 runCRUDAction RestartingCRUD prog = do
@@ -182,26 +185,26 @@ runCRUDAction RestartingCRUD prog = do
         -- Finally, set of the CRUD object
         crud <- actorCRUD push $ HashMap.empty
 
-        let debugging m = return ()
-        let restart' h push env = do
-                push (Shutdown "restart")
+        let debugging _ = return ()
+        let restart' h' push' env = do
+                push' (Shutdown "restart")
 
                 let loop = do
-                        b <- hIsClosed h
-                        if b 
+                        b' <- hIsClosed h'
+                        if b'
                         then return () 
                         else do threadDelay (10 * 1000)
                                 loop
                 loop
 
-                h <- openBinaryFile test_json ReadWriteMode
-                tab <- readTable h 
-                push <- writeableTableUpdate h
-                crud <- actorCRUD push tab
-                let env' = env { theCRUD = crud, restart = restart' h push, shutdown = shutdown' push }
+                h'' <- openBinaryFile test_json ReadWriteMode
+                tab <- readTable h''
+                push'' <- writeableTableUpdate h''
+                crud' <- actorCRUD push'' tab
+                let env' = env { theCRUD = crud', restart = restart' h'' push'', shutdown = shutdown' push }
                 return env'
 
-            shutdown' push = push (Shutdown "bye")
+            shutdown' push' = push' (Shutdown "bye")
         interp prog $ Env crud [] [] debugging (restart' h push) (shutdown' push)
 
 
