@@ -22,7 +22,7 @@ import           Web.Scotty.CRUD.Types
 
 -- | scottyCRUD provides scotty support for a CRUD object.
 -- 
--- > crud <- liftIO $ persistantCRUD "filename"
+-- > crud <- liftIO $ persistentCRUD "filename"
 -- > scottyCRUD "URL" crud
 
 scottyCRUD :: (Show row, FromJSON row, ToJSON row) => String -> CRUD row -> ScottyM ()

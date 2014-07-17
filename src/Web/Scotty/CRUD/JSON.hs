@@ -21,7 +21,7 @@
 module Web.Scotty.CRUD.JSON (
        -- * CRUD functions
        actorCRUD,
-       persistantCRUD,
+       persistentCRUD,
        readOnlyCRUD,
        -- * Table functions
        readTable,
@@ -129,8 +129,8 @@ actorCRUD push env = do
 --
 -- Be careful: The file handle open here never gets closed.
 
-persistantCRUD :: (FromJSON row, ToJSON row) => FilePath -> IO (CRUD row)
-persistantCRUD fileName = do
+persistentCRUD :: (FromJSON row, ToJSON row) => FilePath -> IO (CRUD row)
+persistentCRUD fileName = do
         h <- openBinaryFile fileName ReadWriteMode
         -- Read what you can, please, into a Table.
         tab <- readTable h 

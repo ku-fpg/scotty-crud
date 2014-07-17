@@ -112,7 +112,7 @@ update isJoined db = do
     let f new old | isJoined  = HashMap.union new old  -- join the two maps, use new over old if matched
                   | otherwise = new                   -- simple repalce
     new  <- readTable stdin
-    crud <- persistantCRUD db
+    crud <- persistentCRUD db
     sequence_ [ do ans1 <- getRow crud iD
                    case ans1 of
                         Nothing   -> updateRow crud (Named iD row)
@@ -125,7 +125,7 @@ update isJoined db = do
 
 server_main :: [String] -> [String] -> IO ()
 server_main _ (port:dbs) | all isDigit port && not (null port) = scotty (read port) $ do
-  sequence_ [ do crud <- liftIO $ persistantCRUD db
+  sequence_ [ do crud <- liftIO $ persistentCRUD db
                  scottyCRUD ('/':db) (crud :: CRUD Row)
             | db <- dbs 
             ]

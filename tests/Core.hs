@@ -151,7 +151,7 @@ test_json :: String
 test_json = "test-tmp/test.json" :: String
 
 data CRUD_TEST_TYPE 
-        = PersistantCRUD        -- loading once, using the persistantCRUD function
+        = PersistantCRUD        -- loading once, using the persistentCRUD function
         | RestartingCRUD        -- loading many times.
 
 runCRUDAction :: CRUD_TEST_TYPE -> CRUDAction Object () -> IO Bool
@@ -162,7 +162,7 @@ runCRUDAction PersistantCRUD prog = do
         then removeFile test_json
         else return ()
 
-        crud <- persistantCRUD test_json
+        crud <- persistentCRUD test_json
         let debugging _ = return ()
         let restart' env = return env
         let shutdown' = return ()
