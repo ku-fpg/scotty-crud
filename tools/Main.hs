@@ -100,14 +100,15 @@ table_main ['-':'-':ns] | all isDigit ns && not (null ns) = do
         putStrLn $ unwords [ rjust (unpack k) v | (k,v) <- keyMx ]
 
         sequence_ [ putStrLn $ unwords [ case HashMap.lookup kk v' of
-                                           Nothing -> rjust "" kv
+                                           Nothing -> rjust "-" kv
                                            Just o -> rjust o kv 
                                        | (kk,kv) <- keyMx 
                                        ]
                   | (k,v) <- HashMap.toList tab
                   , let v' = HashMap.insert (pack "id") (unpack k) $ fmap (raw . encode) v
                   ]
-table_main _ = error "crud table: unknown options"
+table_main [] = table_main ["--20"]
+table_main _ = error "crud table: bad flags"
         
 ------------------------------------------------------------------------------------------------------------
         
