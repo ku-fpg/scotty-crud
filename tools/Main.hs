@@ -29,15 +29,25 @@ main = do
           ("server":opts')                -> server_main   flags opts'                            
           _ -> error $ unlines
                 [ "usage: crud [options] [command] [files]"
-                , "         where command = compress | table | update"
+                , "         where command = compress | table | update | delta | server"
                 , ""
+                , "  -- compress a db"
                 , "  crud compress < input.json > compressed-output.json"
                 , "  crud compress db.json"
                 , ""
+                , "  -- output an ASCII table"
                 , "  crud [--'<width>'] table < input.json | less"
+                , "        --<width> : max width of each column (default 20)"
                 , ""
-                , "  crud [--join] update db.json < new.json"
+                , "  -- update a db"
+                , "  crud [--sub] update db.json < new.json"
+                , "        --sub : sub-record merging"
                 , ""
+                , "  -- find the differences between a db and a new-db"
+                , "  crud [--sub] diff db.json new-db.json"
+                , "        --sub : generate a sub-record diff"
+                , ""
+                , "  -- serve up a set of db's (names and URL paths are synonymous)"
                 ,"   crud [--read-only|--local] server 3000 db.json [db2.json ...]"
                 ]
 
@@ -102,12 +112,12 @@ table_main _ = error "crud table: unknown options"
         
 update_main :: [String] -> [String] -> IO ()
 update_main opts [db] = case opts of
-                         []         -> update False
-                         ["--join"] -> update True
+                         []        -> update False
+                         ["--sub"] -> update True
   where  
     update isJoined = do
-        let f new old | isJoined  = HashMap.union new old  -- join the two maps, use new over old if matched
-                      | otherwise = new                   -- simple repalce
+        let f new old | isJoined  = HashMap.union new old  -- join the two rows, use new over old if column matched
+                      | otherwise = new                    -- simple replace with 2nd row
         new <- readTable stdin
         crud <- persistantCRUD db
         sequence_ [ do ans1 <- getRow crud id
