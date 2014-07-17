@@ -25,10 +25,12 @@ module Web.Scotty.CRUD.JSON (
        readOnlyCRUD,
        -- * Table functions
        readTable,
+       foldTable,
        writeTable,
        -- * Table updates
        TableUpdate(..),
        tableUpdate,
+       readTableUpdates,
        writeTableUpdate,
        writeableTableUpdate
        ) where
@@ -160,7 +162,10 @@ readOnlyCRUD crud = CRUD
 -- Table
 
 readTable :: (FromJSON row) => Handle -> IO (Table row)
-readTable h = do
+readTable = foldTable tableUpdate HashMap.empty
+
+foldTable :: (FromJSON row) => (row -> db -> db) -> db -> Handle -> IO db
+foldTable f z h = do
 
     let sz = 32 * 1024 :: Int
 
@@ -181,10 +186,12 @@ readTable h = do
         parseCRUD (Done bs r) env = do
                   case fromJSON r of
                     Error msg -> error msg
-                    Success update -> loadCRUD bs $! tableUpdate update env
+                    Success update -> loadCRUD bs $! f update env
 
-    loadCRUD BS.empty HashMap.empty 
+    loadCRUD BS.empty z
 
+readTableUpdates :: (FromJSON row) => Handle -> IO [TableUpdate row]
+readTableUpdates h = foldTable (:) [] h >>= return . reverse
 
 writeTableUpdate :: (ToJSON row) => Handle -> TableUpdate row -> IO ()
 writeTableUpdate h row = do
