@@ -5,12 +5,12 @@ import Control.Monad.IO.Class (liftIO)
 
 import Data.Aeson
 import Data.HashMap.Strict as HashMap
-import Data.Monoid (mconcat)
 
 import Web.Scotty
 import Web.Scotty.CRUD
 import Web.Scotty.CRUD.JSON (actorCRUD)
 
+main :: IO ()
 main = scotty 3000 $ do
 
   let tab :: Table Row
