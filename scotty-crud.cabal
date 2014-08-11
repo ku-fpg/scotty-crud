@@ -13,6 +13,7 @@ cabal-version:       >=1.10
 library
   exposed-modules:     Web.Scotty.CRUD,
                        Web.Scotty.CRUD.JSON,
+                       Web.Scotty.CRUD.SQL,
                        Web.Scotty.CRUD.Types
   -- other-modules:
   other-extensions:    FlexibleInstances,
@@ -25,7 +26,7 @@ library
                        base                 >= 4.6  && < 4.8,
                        bytestring           >=0.10  && < 0.11,
                        http-types           >= 0.8.5,
-                       scientific           >= 0.2,
+                       scientific           >= 0.3.0,
                        scotty               == 0.8.*,
                        stm                  >= 2.4  && < 2.5,
                        text                 >= 1.1  && < 1.2,
@@ -41,6 +42,7 @@ executable crud
                        bytestring           >= 0.10 && < 0.11,
                        containers           >= 0.5  && < 0.6,
                        scotty               == 0.8.*,
+                       scientific           >= 0.3.0,
                        scotty-crud          == 0.2.0,
                        text                 >= 1.1  && < 1.2,
                        transformers         >= 0.3  && < 0.5,

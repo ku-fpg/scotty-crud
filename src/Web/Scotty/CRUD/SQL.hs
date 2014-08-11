@@ -1,69 +1,108 @@
-{-# LANGUAGE OverloadedStrings, ScopedTypeVariables, TypeFamilies, TypeSynonymInstances, FlexibleInstances #-}
+{-# LANGUAGE OverloadedStrings, ScopedTypeVariables, TypeFamilies, TypeSynonymInstances, FlexibleInstances, RankNTypes #-}
 module Web.Scotty.CRUD.SQL (
-         -- * SQL-style SELECT
-         SELECT(..),
-         SORT_MOD(..),
-         select 
+         -- * SQL-style SELECT, and other operators
+        sqlSelect, sqlSortBy, sqlWhere, like,
+        SortKey(..)
          ) where
 
 import           Control.Monad
-import           Control.Monad.IO.Class (liftIO) 
+import           Control.Monad.IO.Class (liftIO)
 
 import           Data.Aeson
+import           Data.String
+import           Data.Aeson.Types
 import qualified Data.HashMap.Strict as HashMap
+import           Data.List
 import           Data.Monoid
-import           Data.Text (Text, pack)
+import           Data.Text (Text)
+import qualified Data.Text as Text
+import           Data.Scientific
 
 import           Network.HTTP.Types.Status (status204)
 import           Network.HTTP.Types ( StdMethod( OPTIONS ) )
 
 import           Web.Scotty as Scotty
 import           Web.Scotty.CRUD.Types
- 
+
 ------------------------------------------------------------------------------------
--- SQL-style SELECT
 
--- | SQL-style DSL
-data SELECT = SELECT [Text]                    -- ^ Only return listed fields
-            | SORT_BY Text [SORT_MOD]          -- ^ sort on a field
-            | TAKE Int                         -- ^ Only give n answers
-            | DROP Int                         -- ^ ignore the first n answers
-            deriving (Eq, Ord, Show, Read)
+sqlSelect :: [Text] -> [Row] -> [Row]
+sqlSelect ns rows = fmap (\ row -> HashMap.fromList [ (k,v) | (k,v) <- HashMap.toList row, k `elem` ns]) rows
 
--- | execute the SQL DSL, from left to right.
-select :: [SELECT] -> [Row] -> [Row]
-select ss rows = foldl sel rows ss
-  where sel rows (SELECT ns)     = fmap (\ row -> HashMap.fromList [ (k,v) | (k,v) <- HashMap.toList row, k `elem` ns]) rows
-        sel rows (SORT_BY nm ms) 
-                | NUM `elem` ms && DESC `elem` ms = sort_by desc $ prep num 
-                | NUM `elem` ms                   = sort_by desc $ prep num 
-                |                  DESC `elem` ms = sort_by asc  $ prep txt
-                | otherwise                       = sort_by asc  $ prep txt 
-          where 
-                 asc  a b = fst a `compare` fst b
-                 desc a b = fst b `compare` fst a
 
-                 num :: Row -> Maybe Scientific
-                 num row = case HashMap.lookup nm row of
-                            Just (Number n)   -> return n
-                            Just (String txt) -> case reads $ Text.unpack txt of
-                                                   [(a::Scientific,"")] -> Just a
-                                                   _                    -> Nothing
-                            _                 -> Nothing
+sqlSortBy :: Text -> [Row] -> [Row]
+sqlSortBy nm rows = map snd $ sortBy cmp $ prep
+          where
+                 cmp  a b = fst a `compare` fst b
 
-                 txt :: Row -> Maybe Text
-                 txt row = case HashMap.lookup nm row of
-                            Just (String txt) -> return txt
-                            Just (Number n)   -> return $ Text.pack $ show n
-                            Just (Bool b)     -> return $ Text.pack $ show b
-                            _                 -> Nothing
+                 key :: Row -> Maybe SortKey
+                 key row = fmap SortKey $ HashMap.lookup nm row
 
-                 sort_by :: (Ord a) => ((a,b) -> (a,b) -> Ordering) -> [(a,b)] -> [b]
-                 sort_by cmp = map snd . sortBy cmp
+                 prep :: [(Maybe SortKey,Row)]
+                 prep = map (\ v -> (key v,v)) rows
 
-                 prep :: forall a . (Row -> a) -> [(a,Row)]                      
-                 prep p = map (\ v -> (p v,v)) rows
-                              
 
-data SORT_MOD = NUM | DESC
-        deriving (Eq, Ord, Show, Read)
+
+sqlWhere :: Text -> (SortKey -> Bool) -> Table Row -> Table Row
+sqlWhere nm op tab = liftTable (filter f) tab
+  where
+      f row = case HashMap.lookup nm row of
+               Just value -> op (SortKey value)
+               Nothing -> False
+
+------------------------------------------------------------------------------------
+
+liftTable :: ([Row] -> [Row]) -> Table Row -> Table Row
+liftTable f = HashMap.fromList
+            . map (\ (Named key row) -> (key,row))
+            . map rowToNamedRow
+            . f
+            . map namedRowToRow
+            . map (\ (key,row)-> Named key row)
+            . HashMap.toList
+
+------------------------------------------------------------------------------------
+
+newtype SortKey = SortKey Value
+  deriving (Eq,Show)
+
+instance Ord SortKey where
+  compare (SortKey (String s1)) (SortKey (String s2)) = s1 `compare` s2
+  compare (SortKey (Number s1)) (SortKey (Number s2)) = s1 `compare` s2
+  compare s1 s2 = show s1 `compare` show s2
+
+instance Num SortKey where
+  (+) = error "(+)"
+  (-) = error "(-)"
+  (*) = error "(*)"
+  abs = error "abs"
+  signum = error "signum"
+
+  fromInteger = SortKey . Number . fromInteger
+
+instance Fractional SortKey where
+  recip = error "recip"
+  fromRational = SortKey . Number . fromRational
+
+instance IsString SortKey where
+  fromString = SortKey . String . fromString
+
+
+like :: SortKey -> Text -> Bool
+like (SortKey (String s)) ms = case parsePercent ms of
+    (False,txt,True ) -> txt `Text.isPrefixOf` s
+    (True, txt,False) -> txt `Text.isSuffixOf` s
+    (True, txt,True ) -> txt `Text.isInfixOf` s
+    (False,txt,False) -> txt == s
+like _ _ = False
+
+parsePercent :: Text -> (Bool,Text,Bool)
+parsePercent txt0 = (hd,txt2,tl)
+  where
+    (hd,txt1) = if not (Text.null txt0) && Text.head txt0 == '%'
+                then (True,Text.tail txt0)
+                else (False,txt0)
+
+    (txt2,tl) = if not (Text.null txt1) && Text.last txt1 == '%'
+                then (Text.init txt1,True)
+                else (txt1,False)

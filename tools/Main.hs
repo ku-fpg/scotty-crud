@@ -10,7 +10,9 @@ import           Data.Char (chr, ord, isDigit)
 import qualified Data.HashMap.Strict as HashMap
 import           Data.List
 import qualified Data.Set as Set
+import           Data.Scientific
 import           Data.Set (Set)
+import           Data.String
 import qualified Data.Text as Text
 import           Data.Text (Text, pack, unpack)
 
@@ -23,6 +25,7 @@ import           System.IO
 import           Web.Scotty as Scotty hiding (raw)
 import           Web.Scotty.CRUD
 import           Web.Scotty.CRUD.JSON
+import           Web.Scotty.CRUD.SQL
 
 
 
@@ -35,6 +38,7 @@ main = do
           ("table":opts')    | null opts' -> table_main flags
           ("update":opts')                -> update_main   opts'
           ("delta":opts')                 -> delta_main     opts'
+          ("where":opts')                  -> where_main    opts'
           ("server":opts')                -> server_main   flags opts'
           _ -> error $ unlines
                 [ "usage: crud [options] [command] [files]"
@@ -53,6 +57,15 @@ main = do
                 , ""
                 , "  -- find the delta differences between a db and a new-db"
                 , "  crud delta db.json new-db.json"
+                , ""
+                , "  -- find the rows in db that match the search criteria"
+                , "  crud where <column-name> <operator> <match> < db.json"
+                ,"       Search:"
+                ,"         * id like '%'    -- match rows that have an id selector"
+                ,"         * id == 1234     -- match row with id == 1234"
+                ,"         * id /= 1234     -- match row with id /= 1234"
+                ,"         * id < 1234      -- match row with id /= 1234"
+                ,"         * id like '%abc' -- match row with id suffixed with abc"
                 , ""
                 , "  -- serve up a set of db's (names and URL paths are synonymous)"
                 ,"   crud [--auth=user:pass|--read-only|--local|--index] server 3000 \\"
@@ -169,6 +182,40 @@ delta db db_new = do
                         Just (Named _ row') -> updateRow crud (Named iD (f row row'))
 -}
     return ()
+
+
+------------------------------------------------------------------------------------------------------------
+
+where_main :: [String] ->  IO ()
+where_main [nm,op,match] = do
+    tab0 :: Table Row <- readTable stdin
+    writeTable stdout $ sqlWhere (Text.pack nm) (\ lhs ->
+          or [ parse_op op lhs rhs
+             | rhs <- rhss
+             ]) tab0
+  where
+
+      parse_op :: String -> SortKey -> SortKey -> Bool
+      parse_op "==" = (==)
+      parse_op "="  = (==)
+      parse_op "/=" = (/=)
+      parse_op "<"  = (<)
+      parse_op ">"  = (>)
+      parse_op "<=" = (<=)
+      parse_op ">=" = (>=)
+      parse_op "like" = \ lhs rhs ->
+        case rhs of
+         (SortKey (String str)) -> lhs `like` str
+         _ -> False
+      parse_op op = error $ "bad op: " ++ show op
+
+      rhss :: [SortKey]
+      rhss = fromString match :
+                 case reads match of
+                     [(a::Scientific,"")] -> [realToFrac a]
+                     _                    -> []
+
+where_main _ = error "crud where: unknown options"
 
 ------------------------------------------------------------------------------------------------------------
 

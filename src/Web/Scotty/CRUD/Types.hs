@@ -2,7 +2,7 @@
 module Web.Scotty.CRUD.Types (
        CRUD(..),
        Id, Table, Row, Named(..),
-       namedRowToRow, rowToNamedRow
+       namedRowToRow, rowToNamedRow, lookupColumn
        ) where
 
 import           Control.Applicative
@@ -13,7 +13,7 @@ import           Data.Text(Text)
 import qualified Data.HashMap.Strict as HashMap
 
 ------------------------------------------------------------------------------------
--- | A CRUD is a OO-style database Table of typed rows, with getters and setters. 
+-- | A CRUD is a OO-style database Table of typed rows, with getters and setters.
 --   The default row is a JSON Object.
 data CRUD row = CRUD
      { createRow :: row       -> IO (Named row)
@@ -23,7 +23,7 @@ data CRUD row = CRUD
      , deleteRow :: Id        -> IO () -- alway works
      }
 ------------------------------------------------------------------------------------
--- Basic synonyms for key structures 
+-- Basic synonyms for key structures
 --
 -- | Every (Named) Row must have an id field.
 type Id        = Text
@@ -49,7 +49,7 @@ instance FromJSON row => FromJSON (Named row) where
                 <*> (parseJSON $ Object $ HashMap.delete "id" v)
     parseJSON _ = fail "row should be an object"
 
-instance ToJSON row => ToJSON (Named row) where                
+instance ToJSON row => ToJSON (Named row) where
    toJSON = Object . namedRowToRow
 
 
@@ -57,11 +57,14 @@ namedRowToRow :: (ToJSON row) => Named row -> Row
 namedRowToRow (Named key row) = case toJSON row of
      Object env -> HashMap.insert "id" (String key) env
      _ -> error "row should be an object"
-     
 
-rowToNamedRow :: (FromJSON row) => Row -> Named row
+
+rowToNamedRow :: FromJSON row => Row -> Named row
 rowToNamedRow row = case fromJSON (Object row) of
      Error msg -> error $ msg
      Success a -> a
 
-                
+lookupColumn ::ToJSON row => Text -> row -> Maybe Value
+lookupColumn nm row = case toJSON row of
+     Object env -> HashMap.lookup nm env
+     _ -> error "row should be an object"
