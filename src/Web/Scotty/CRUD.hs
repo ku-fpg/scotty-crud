@@ -12,7 +12,7 @@ import           Data.Aeson
 import qualified Data.HashMap.Strict as HashMap
 import           Data.Monoid
 
-import           Control.Monad.IO.Class (liftIO) 
+import           Control.Monad.IO.Class (liftIO)
 
 import           Network.HTTP.Types.Status (status204)
 import           Network.HTTP.Types ( StdMethod( OPTIONS ) )
@@ -21,14 +21,14 @@ import           Web.Scotty as Scotty
 import           Web.Scotty.CRUD.Types
 
 -- | scottyCRUD provides scotty support for a CRUD object.
--- 
+--
 -- > crud <- liftIO $ persistentCRUD "filename"
 -- > scottyCRUD "URL" crud
 
 scottyCRUD :: (Show row, FromJSON row, ToJSON row) => String -> CRUD row -> ScottyM ()
 scottyCRUD url crud = do
         let xRequest = do
-               addHeader "Access-Control-Allow-Headers" "X-Requested-With, Content-Type, Accep"
+               addHeader "Access-Control-Allow-Headers" "Authorization, Origin, X-Requested-With, Content-Type, Accep"
                addHeader "Access-Control-Allow-Methods" "POST, GET, PUT, DELETE, OPTIONS"
                addHeader "Access-Control-Allow-Origin"  "*"
 
@@ -38,12 +38,12 @@ scottyCRUD url crud = do
                 namedRow <- liftIO $ createRow crud dat
                 Scotty.json namedRow
 
-        get (capture url) $ do 
+        get (capture url) $ do
                 xRequest
                 tab <- liftIO $ getTable crud
                 Scotty.json $ [ Named k v | (k,v) <- HashMap.toList $ tab ]
-        
-        get (capture (url <> "/:id")) $ do 
+
+        get (capture (url <> "/:id")) $ do
                 xRequest
                 iD <- param "id"
                 opt_row <- liftIO $ getRow crud iD
@@ -51,13 +51,13 @@ scottyCRUD url crud = do
                   Nothing -> next
                   Just namedRow -> Scotty.json $ namedRow
 
-        put (capture (url <> "/:id")) $ do 
+        put (capture (url <> "/:id")) $ do
                 xRequest
                 dat <- jsonData
                 () <- liftIO $ updateRow crud dat
                 Scotty.json dat
-                
-        delete (capture (url <> "/:id")) $ do 
+
+        delete (capture (url <> "/:id")) $ do
                 xRequest
                 iD <- param "id"
                 () <- liftIO $ deleteRow crud iD
@@ -71,5 +71,3 @@ scottyCRUD url crud = do
         addroute OPTIONS (capture (url <> "/:id")) $ do
                 xRequest
                 text "OK"
-
-                

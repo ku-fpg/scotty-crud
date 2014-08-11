@@ -1,17 +1,21 @@
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables, OverloadedStrings #-}
 module Main where
 
-import           Control.Monad.IO.Class (liftIO) 
+import           Control.Monad.IO.Class (liftIO)
 
 import           Data.Aeson
-import qualified Data.ByteString.Lazy as BS
-import           Data.Char (chr, isDigit)
+import qualified Data.ByteString      as BS
+import qualified Data.ByteString.Lazy as LBS
+import           Data.Char (chr, ord, isDigit)
 import qualified Data.HashMap.Strict as HashMap
 import           Data.List
 import qualified Data.Set as Set
 import           Data.Set (Set)
 import qualified Data.Text as Text
 import           Data.Text (Text, pack, unpack)
+
+import           Network.Wai.Middleware.HttpAuth
+import           Network.Wai
 
 import           System.Environment
 import           System.IO
@@ -20,6 +24,8 @@ import           Web.Scotty as Scotty hiding (raw)
 import           Web.Scotty.CRUD
 import           Web.Scotty.CRUD.JSON
 
+
+
 main :: IO ()
 main = do
         args <- getArgs
@@ -27,9 +33,9 @@ main = do
         case opts of
           ("compress":opts') | null flags -> compress_main opts'
           ("table":opts')    | null opts' -> table_main flags
-          ("update":opts')                -> update_main   opts'                            
+          ("update":opts')                -> update_main   opts'
           ("delta":opts')                 -> delta_main     opts'
-          ("server":opts')                -> server_main   flags opts'                            
+          ("server":opts')                -> server_main   flags opts'
           _ -> error $ unlines
                 [ "usage: crud [options] [command] [files]"
                 , "         where command = compress | table | update | delta | server"
@@ -49,7 +55,18 @@ main = do
                 , "  crud delta db.json new-db.json"
                 , ""
                 , "  -- serve up a set of db's (names and URL paths are synonymous)"
-                ,"   crud [--read-only|--local] server 3000 db.json [db2.json ...]"
+                ,"   crud [--auth=user:pass|--read-only|--local|--index] server 3000 \\"
+                ,"         db.json [db2.json ...] [-- file [file ...]]"
+                ,""
+                ,"       Options:"
+                ,"         * --auth      -- use basic authentication"
+                ,"         * --read-only -- serve up the CRUDs read-only (not implemented)"
+                ,"         * --local     -- only accept connections from local macine (not implemented)"
+                ,"         * --index     -- serve an index.html as /index.html and /"
+                ,""
+                ,"      There are two types of things that can be served:"
+                ,"        * json-dbs     -- flat sequences of json objects"
+                ,"        * files        -- after --, served as flat files"
                 ]
 
 ------------------------------------------------------------------------------------------------------------
@@ -79,9 +96,9 @@ table_main ['-':'-':ns] | all isDigit ns && not (null ns) = do
 
 --        print (HashMap.elems tab)
 --        print (map HashMap.keys (HashMap.elems tab))
-        
+
         let keys :: Set Text = Set.fromList $ pack "id" : concatMap HashMap.keys (HashMap.elems tab)
-        
+
         let keyMx = id -- fmap (\ (k,v) -> (k,max (Text.length k) v))
                   $ sortBy (\ (k1,_) (k2,_) -> if k1 == k2 then EQ else
                                                if k1 == pack "id" then LT else
@@ -101,17 +118,17 @@ table_main ['-':'-':ns] | all isDigit ns && not (null ns) = do
 
         sequence_ [ putStrLn $ unwords [ case HashMap.lookup kk v' of
                                            Nothing -> rjust "-" kv
-                                           Just o -> rjust o kv 
-                                       | (kk,kv) <- keyMx 
+                                           Just o -> rjust o kv
+                                       | (kk,kv) <- keyMx
                                        ]
                   | (k,v) <- HashMap.toList tab
                   , let v' = HashMap.insert (pack "id") (unpack k) $ fmap (raw . encode) v
                   ]
 table_main [] = table_main ["--20"]
 table_main _ = error "crud table: bad flags"
-        
+
 ------------------------------------------------------------------------------------------------------------
-        
+
 update_main :: [String] -> IO ()
 update_main [db] = update db
 update_main _    = error "crud update: unknown options"
@@ -127,7 +144,7 @@ update db = do
     return ()
 
 ------------------------------------------------------------------------------------------------------------
-        
+
 delta_main :: [String] -> IO ()
 delta_main [db,db_new] = delta db db_new
 delta_main _           = error "crud delta: unknown options"
@@ -156,11 +173,51 @@ delta db db_new = do
 ------------------------------------------------------------------------------------------------------------
 
 server_main :: [String] -> [String] -> IO ()
-server_main _ (port:dbs) | all isDigit port && not (null port) = scotty (read port) $ do
+server_main opts (port:dbs) | all isDigit port && not (null port) = scotty (read port) $ do
+
+  let check u p = return
+                $ not
+                $ null
+                $ filter (\ (u',p') -> u == u' && p == p')
+                $ auth
+
+  if null auth
+  then return ()
+  else middleware $ \ app -> \ req ->
+          if requestMethod req == "OPTIONS"
+          then app req  -- OPTIONS do not permit authenticaton
+          else basicAuth check "CRUD" app req
+
   sequence_ [ do crud <- liftIO $ persistentCRUD db
                  scottyCRUD ('/':db) (crud :: CRUD Row)
-            | db <- dbs 
+            | db <- takeWhile (/= "--") dbs ]
+
+
+  sequence_ [ do get (capture ('/' : nm)) $ do file nm
+            | nm <- dropWhile (/= "--") dbs
+            , nm /= "--"
             ]
+
+
+  let index_html = do
+        addHeader "Content-Type" "text/html; charset=iso-8859-1"
+        file "index.html"
+
+  if not $ null $ [ () |"--index" <- opts ]
+  then do get "/" index_html
+          get "/index.html" index_html
+  else return ()
+
+ where
+    auth = [ case span (/= ':') userPass of
+               (user,':':pass) -> (unraw user,unraw pass)
+               (user,[])       -> (unraw user,unraw [])
+           | opt <- opts
+           , "--auth=" `isPrefixOf` opt
+           , ('=':userPass) <- [dropWhile (/= '=') $ opt]
+           ]
+
+
 
 server_main _ _ = error "crud server: unknown options"
 
@@ -168,6 +225,8 @@ server_main _ _ = error "crud server: unknown options"
 ------------------------------------------------------------------------------------------------------------
 
 -- Get the raw ASCII text, please
-raw :: BS.ByteString -> String
-raw = map (chr.fromIntegral) . BS.unpack        
-        
+raw :: LBS.ByteString -> String
+raw = map (chr.fromIntegral) . LBS.unpack
+
+unraw :: String -> BS.ByteString
+unraw = BS.pack . map (fromIntegral.ord)
