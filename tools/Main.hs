@@ -170,6 +170,7 @@ delta db db_new = do
     new  :: Table Row <- openFile db_new ReadMode >>= readTable
     let iDs = HashMap.keys old ++ [ k | k <- HashMap.keys new, not (k `HashMap.member` old) ]
     sequence_ [ case (HashMap.lookup iD old,HashMap.lookup iD new) of
+   	      	  (lhs,rhs) | lhs == rhs -> return ()
                   (_,     Just n)   -> writeTableUpdate stdout (RowUpdate (Named iD n :: Named Row))
                   (Just _,Nothing)  -> writeTableUpdate stdout (RowDelete iD :: TableUpdate Row)
                   (Nothing,Nothing) -> error "internal error"
