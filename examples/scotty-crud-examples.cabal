@@ -15,6 +15,7 @@ executable scotty-crud-service-example
     Build-depends:
          aeson                  >= 0.7 && < 0.9,
          base                   >= 4.6,
+         text                   == 1.1.*,
          scotty                 == 0.8.*,
          scotty-crud            == 0.2.*,
          transformers           >= 0.3 && < 0.5,
