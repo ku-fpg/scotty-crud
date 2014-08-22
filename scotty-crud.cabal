@@ -57,6 +57,7 @@ executable crud
 Test-Suite test-crud
     type:              exitcode-stdio-1.0
     main-is:           Core.hs
+    other-modules:     QC
     hs-source-dirs:    tests
     other-extensions:  FlexibleInstances,
                        GADTs
@@ -68,12 +69,9 @@ Test-Suite test-crud
     build-depends:     aeson                >= 0.7  && < 0.9,
                        base                 >= 4.6  && < 4.8,
                        directory            >= 1.2  && < 1.3,
-                       hashable             >= 1.2  && < 1.3,
-                       lens                 >= 4.2  && < 4.4,
                        QuickCheck           >= 2.7  && < 2.8,
                        scientific           == 0.3.*,
                        scotty-crud          == 0.2.0,
-                       stm                  >= 2.4  && < 2.5,
                        text                 >= 1.1  && < 1.2,
                        unordered-containers >= 0.2  && < 0.3,
                        vector               >= 0.10 && < 0.11
