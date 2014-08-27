@@ -208,7 +208,7 @@ where_main [nm,op,match] = do
         case rhs of
          (SortKey (String str)) -> lhs `like` str
          _ -> False
-      parse_op op = error $ "bad op: " ++ show op
+      parse_op op' = error $ "bad op: " ++ show op'
 
       rhss :: [SortKey]
       rhss = fromString match :

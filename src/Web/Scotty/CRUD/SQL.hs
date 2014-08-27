@@ -5,23 +5,13 @@ module Web.Scotty.CRUD.SQL (
         SortKey(..)
          ) where
 
-import           Control.Monad
-import           Control.Monad.IO.Class (liftIO)
-
 import           Data.Aeson
-import           Data.String
-import           Data.Aeson.Types
 import qualified Data.HashMap.Strict as HashMap
 import           Data.List
-import           Data.Monoid
+import           Data.String
 import           Data.Text (Text)
 import qualified Data.Text as Text
-import           Data.Scientific
 
-import           Network.HTTP.Types.Status (status204)
-import           Network.HTTP.Types ( StdMethod( OPTIONS ) )
-
-import           Web.Scotty as Scotty
 import           Web.Scotty.CRUD.Types
 
 ------------------------------------------------------------------------------------
