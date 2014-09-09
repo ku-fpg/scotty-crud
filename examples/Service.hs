@@ -3,11 +3,10 @@ module Main where
 
 import Control.Monad.IO.Class (liftIO) 
 
-import Data.Monoid
-
-import Data.Text (Text, pack)
 import Data.Aeson
+import Data.Monoid
 import Data.HashMap.Strict as HashMap
+import Data.Text (pack)
 
 import Web.Scotty
 import Web.Scotty.CRUD
