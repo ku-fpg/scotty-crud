@@ -1,5 +1,5 @@
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, OverloadedStrings #-}
-
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 module QC where
 
 import           Control.Applicative
