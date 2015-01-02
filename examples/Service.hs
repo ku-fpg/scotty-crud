@@ -17,16 +17,16 @@ main = scotty 3000 $ do
 
   let tab :: Table Row
       tab = HashMap.fromList $
-      	    [("foo",HashMap.fromList [("firstname", "Roger"),("lastname","Rabbit"),("age", Number 21)])
-	    ,("abc",HashMap.fromList [("firstname", "Roger"),("lastname","Rabbit"),("bla",Bool True)])
-	    ] ++
-	    [ ("abc-" <> pack (show n),HashMap.fromList [("firstname", "Roger"),("lastname","Rabbit"),("bla",Bool False)])
-	    | n <- [1..100]
-	    ]
+            [("foo",HashMap.fromList [("firstname", "Roger"),("lastname","Rabbit"),("age", Number 21)])
+            ,("abc",HashMap.fromList [("firstname", "Roger"),("lastname","Rabbit"),("bla",Bool True)])
+            ] ++
+            [ ("abc-" <> pack (show n),HashMap.fromList [("firstname", "Roger"),("lastname","Rabbit"),("bla",Bool False)])
+            | n <- [1..100::Int]
+            ]
 
   users  <- liftIO $ actorCRUD 
-  	    	      (\ _ -> return ())	-- do not store the updates anywhere
-	      tab     	     		-- but supply an (updatable) table
+                      (\ _ -> return ())    -- do not store the updates anywhere
+                      tab                   -- but supply an (updatable) table
 
   scottyCRUD "/users" users
 

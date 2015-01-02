@@ -1,8 +1,10 @@
-{-# LANGUAGE OverloadedStrings, ScopedTypeVariables, TypeOperators, TypeFamilies, TypeSynonymInstances, FlexibleInstances, GADTs #-}
+{-# LANGUAGE CPP, OverloadedStrings, ScopedTypeVariables, TypeOperators, TypeFamilies, TypeSynonymInstances, FlexibleInstances, GADTs #-}
 
 module Main where
 
+#if !(MIN_VERSION_base(4,8,0))
 import           Control.Applicative
+#endif
 --TMP
 import           Control.Concurrent (threadDelay)
 import           Control.Monad

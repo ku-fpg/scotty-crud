@@ -61,9 +61,9 @@ import           Web.Scotty.CRUD
 --   starts with the given table, and sends update events
 --   to the provided higher-order update function.
 
-actorCRUD :: (TableUpdate row -> IO ())	   
-	 -> Table row	-- initial Table row
-	 -> IO (CRUD row)
+actorCRUD :: (TableUpdate row -> IO ()) 
+         -> Table row   -- initial Table row
+         -> IO (CRUD row)
 actorCRUD push env = do
 
     table <- newTVarIO env
