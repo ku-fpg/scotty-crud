@@ -1,73 +1,95 @@
-{-# LANGUAGE OverloadedStrings, ScopedTypeVariables, TypeFamilies, TypeSynonymInstances, FlexibleInstances #-}
+{-# LANGUAGE RankNTypes, TypeOperators, OverloadedStrings, ScopedTypeVariables, TypeFamilies, TypeSynonymInstances, FlexibleInstances, GADTs #-}
 module Web.Scotty.CRUD (
-       -- * CRUD Service
-       scottyCRUD,
-       -- * Basic Types
-       CRUD(..),
-       Id, Table, Row, Named(..)
+       scottyCRUD, CRUD(..), Crud(..)
        ) where
 
+import qualified  Control.Object as O
+import            Control.Transformation ((#))
 
 import           Data.Aeson
-import qualified Data.HashMap.Strict as HashMap
 import           Data.Monoid
+import           Data.Text(Text)
 
 import           Control.Monad.IO.Class (liftIO)
 
 import           Network.HTTP.Types.Status (status204)
 import           Network.HTTP.Types ( StdMethod( OPTIONS ) )
 
-import           Web.Scotty as Scotty
-import           Web.Scotty.CRUD.Types
+import qualified Web.Scotty as Scotty
+import           Web.Scotty (capture, param, jsonData, ScottyM,raw)
+
 
 -- | scottyCRUD provides scotty support for a CRUD object.
 --
 -- > crud <- liftIO $ persistentCRUD "filename"
 -- > scottyCRUD "URL" crud
 
-scottyCRUD :: (Show row, FromJSON row, ToJSON row) => String -> CRUD row -> ScottyM ()
+class Crud f where
+  create :: Value -> f Value
+  get    :: Text  -> f (Maybe Value)
+  table  ::          f [Value]
+  update :: Value -> f ()
+  delete :: Text  -> f ()
+
+data CRUD :: * -> * where
+  Create :: Value -> CRUD Value
+  Get    :: Text  -> CRUD (Maybe Value)
+  Table  ::          CRUD [Value]
+  Update :: Value -> CRUD ()
+  Delete :: Text  -> CRUD ()
+        
+instance Crud CRUD where
+  create = Create
+  get    = Get
+  table  = Table
+  update = Update
+  delete = Delete
+
+scottyCRUD :: Crud f => String -> O.Object f -> ScottyM ()
 scottyCRUD url crud = do
         let xRequest = do
-               addHeader "Access-Control-Allow-Headers" "Authorization, Origin, X-Requested-With, Content-Type, Accep"
-               addHeader "Access-Control-Allow-Methods" "POST, GET, PUT, DELETE, OPTIONS"
-               addHeader "Access-Control-Allow-Origin"  "*"
+               Scotty.addHeader "Access-Control-Allow-Headers" "Authorization, Origin, X-Requested-With, Content-Type, Accep"
+               Scotty.addHeader "Access-Control-Allow-Methods" "POST, GET, PUT, DELETE, OPTIONS"
+               Scotty.addHeader "Access-Control-Allow-Origin"  "*"
 
-        post (capture url) $ do
+        Scotty.post (capture url) $ do
                 xRequest
                 dat <- jsonData
-                namedRow <- liftIO $ createRow crud dat
+                namedRow <- liftIO $ crud # create dat
                 Scotty.json namedRow
 
-        get (capture url) $ do
+        Scotty.get (capture url) $ do
                 xRequest
-                tab <- liftIO $ getTable crud
-                Scotty.json $ [ Named k v | (k,v) <- HashMap.toList $ tab ]
+                tab <- liftIO $ crud # table
+                Scotty.json tab
 
-        get (capture (url <> "/:id")) $ do
+        Scotty.get (capture (url <> "/:id")) $ do
                 xRequest
                 iD <- param "id"
-                opt_row <- liftIO $ getRow crud iD
+                opt_row <- liftIO $ crud # get iD
                 case opt_row of
-                  Nothing -> next
+                  Nothing -> Scotty.next
                   Just namedRow -> Scotty.json $ namedRow
 
-        put (capture (url <> "/:id")) $ do
+        Scotty.put (capture (url <> "/:id")) $ do
                 xRequest
-                dat <- jsonData
-                () <- liftIO $ updateRow crud dat
+                dat <- Scotty.jsonData
+                () <- liftIO $ crud # update dat
                 Scotty.json dat
 
-        delete (capture (url <> "/:id")) $ do
+        Scotty.delete (capture (url <> "/:id")) $ do
                 xRequest
                 iD <- param "id"
-                () <- liftIO $ deleteRow crud iD
-                status $ status204
+                () <- liftIO $ crud # delete iD
+                Scotty.status $ status204
                 raw ""
 
-        addroute OPTIONS (capture url) $ do
+        Scotty.addroute OPTIONS (capture url) $ do
                 xRequest
-                text "OK"
+                Scotty.text "OK"
 
-        addroute OPTIONS (capture (url <> "/:id")) $ do
+        Scotty.addroute OPTIONS (capture (url <> "/:id")) $ do
                 xRequest
-                text "OK"
+                Scotty.text "OK"
+
+
