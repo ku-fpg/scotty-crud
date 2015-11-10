@@ -9,6 +9,7 @@ import            Control.Transformation ((#))
 import           Data.Aeson
 import           Data.Monoid
 import           Data.Text(Text)
+import qualified Data.Text.Lazy as L
 
 import           Control.Monad.IO.Class (liftIO)
 
@@ -25,18 +26,18 @@ import           Web.Scotty (capture, param, jsonData, ScottyM,raw)
 -- > scottyCRUD "URL" crud
 
 class Crud f where
-  create :: Value -> f Value
-  get    :: Text  -> f (Maybe Value)
-  table  ::          f [Value]
-  update :: Value -> f ()
-  delete :: Text  -> f ()
+  create :: Value                  -> f Value
+  get    :: Text                   -> f (Maybe Value)
+  table  ::          [(Text,Text)] -> f [Value]
+  update :: Value                  -> f ()
+  delete :: Text                   -> f ()
 
 data CRUD :: * -> * where
-  Create :: Value -> CRUD Value
-  Get    :: Text  -> CRUD (Maybe Value)
-  Table  ::          CRUD [Value]
-  Update :: Value -> CRUD ()
-  Delete :: Text  -> CRUD ()
+  Create :: Value                  -> CRUD Value
+  Get    :: Text                   -> CRUD (Maybe Value)
+  Table  ::          [(Text,Text)] -> CRUD [Value]
+  Update :: Value                  -> CRUD ()
+  Delete :: Text                   -> CRUD ()
         
 instance Crud CRUD where
   create = Create
@@ -60,7 +61,8 @@ scottyCRUD url crud = do
 
         Scotty.get (capture url) $ do
                 xRequest
-                tab <- liftIO $ crud # table
+                ps <- fmap (\ (a,b) -> (L.toStrict a, L.toStrict b)) <$> Scotty.params
+                tab <- liftIO $ crud # table ps
                 Scotty.json tab
 
         Scotty.get (capture (url <> "/:id")) $ do
