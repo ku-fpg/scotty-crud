@@ -4,7 +4,7 @@ module Web.Scotty.CRUD (
        ) where
 
 import qualified  Control.Object as O
-import            Control.Transformation ((#))
+import            Control.Natural ((#))
 
 import           Data.Aeson
 import           Data.Monoid
@@ -56,19 +56,19 @@ scottyCRUD url crud = do
         Scotty.post (capture url) $ do
                 xRequest
                 dat <- jsonData
-                namedRow <- liftIO $ crud # create dat
+                namedRow <- liftIO (crud # create dat)
                 Scotty.json namedRow
 
         Scotty.get (capture url) $ do
                 xRequest
                 ps <- fmap (\ (a,b) -> (L.toStrict a, L.toStrict b)) <$> Scotty.params
-                tab <- liftIO $ crud # table ps
+                tab <- liftIO (crud # table ps)
                 Scotty.json tab
 
         Scotty.get (capture (url <> "/:id")) $ do
                 xRequest
                 iD <- param "id"
-                opt_row <- liftIO $ crud # get iD
+                opt_row <- liftIO (crud # get iD)
                 case opt_row of
                   Nothing -> Scotty.next
                   Just namedRow -> Scotty.json $ namedRow
@@ -76,13 +76,13 @@ scottyCRUD url crud = do
         Scotty.put (capture (url <> "/:id")) $ do
                 xRequest
                 dat <- Scotty.jsonData
-                () <- liftIO $ crud # update dat
+                () <- liftIO (crud # update dat)
                 Scotty.json dat
 
         Scotty.delete (capture (url <> "/:id")) $ do
                 xRequest
                 iD <- param "id"
-                () <- liftIO $ crud # delete iD
+                () <- liftIO (crud # delete iD)
                 Scotty.status $ status204
                 raw ""
 
