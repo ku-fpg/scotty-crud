@@ -1,4 +1,4 @@
-name:                crud-tests
+name:                scotty-crud-tests
 version:             0.1.0
 synopsis:            tests for crud
 license:             BSD3
