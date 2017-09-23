@@ -19,5 +19,6 @@ shared-sandbox/
 keep/
 tmp/
 test-tmp/
+.stack-work/
 
 
